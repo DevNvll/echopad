@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { Notebook, Note, AppSettings } from './types'
-import { extractTags, extractUrls } from './utils/formatting'
 import {
   getVaultPath,
   setVaultPath,
@@ -17,7 +16,6 @@ import {
   updateNote,
   deleteNote,
   toggleNotebookPin,
-  searchNotes,
   syncVaultTags,
   syncNoteTags,
   removeNoteTags,
@@ -39,20 +37,14 @@ import {
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
 import { SettingsModal, SettingsSection } from './components/SettingsModal'
-import {
-  Hash,
-  Trash2,
-  Edit2,
-  Copy,
-  FolderOpen,
-  FolderPlus,
-  PanelLeftClose,
-  PanelLeft
-} from 'lucide-react'
+import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
 import { SplashScreen } from './components/SplashScreen'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { VaultSetup } from './components/VaultSetup'
+import { NotebookHeader } from './components/NotebookHeader'
+import { useSidebarResize, useKeyboardShortcuts } from './hooks'
 
 function App() {
   const [vaultPath, setVaultPathState] = useState<string | null>(null)
@@ -66,10 +58,7 @@ function App() {
   const [allTags, setAllTags] = useState<TagWithCount[]>([])
   const [commandInitialSearch, setCommandInitialSearch] = useState('')
 
-  const [sidebarWidth, setSidebarWidth] = useState(260)
-  const [isResizing, setIsResizing] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isNotebooksLoaded, setIsNotebooksLoaded] = useState(false)
   const [isTagsLoaded, setIsTagsLoaded] = useState(false)
 
@@ -91,6 +80,24 @@ function App() {
     type: 'notebook' | 'message'
     data: Notebook | Note
   } | null>(null)
+
+  const {
+    sidebarWidth,
+    setSidebarWidth,
+    isResizing,
+    startResizing,
+    isSidebarCollapsed,
+    setIsSidebarCollapsed,
+    toggleSidebar
+  } = useSidebarResize()
+
+  useKeyboardShortcuts({
+    isCommandOpen,
+    isSettingsOpen,
+    onToggleCommand: useCallback(() => setIsCommandOpen((prev) => !prev), []),
+    onToggleSettings: useCallback(() => setIsSettingsOpen((prev) => !prev), []),
+    onOpenSettings: useCallback(() => setSettingsSection('general'), [])
+  })
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -130,7 +137,7 @@ function App() {
       setIsInitialized(true)
     }
     loadSettings()
-  }, [])
+  }, [setSidebarWidth, setIsSidebarCollapsed])
 
   useEffect(() => {
     if (!vaultPath) return
@@ -231,60 +238,6 @@ function App() {
     setTargetMessageId(null)
     saveSetting('lastActiveNotebook', relativePath)
   }
-
-  const startResizing = useCallback(() => {
-    setIsResizing(true)
-  }, [])
-
-  const widthRef = React.useRef(sidebarWidth)
-  useEffect(() => {
-    widthRef.current = sidebarWidth
-  }, [sidebarWidth])
-
-  const stopResizingWrapper = useCallback(() => {
-    setIsResizing(false)
-    saveSetting('sidebarWidth', widthRef.current)
-  }, [])
-
-  const resize = useCallback(
-    (mouseMoveEvent: MouseEvent) => {
-      if (isResizing) {
-        const newWidth = mouseMoveEvent.clientX
-        if (newWidth >= 200 && newWidth <= 480) {
-          setSidebarWidth(newWidth)
-        }
-      }
-    },
-    [isResizing]
-  )
-
-  const toggleSidebar = useCallback(() => {
-    setIsSidebarCollapsed((prev) => {
-      const newValue = !prev
-      saveSetting('sidebarCollapsed', newValue)
-      return newValue
-    })
-  }, [])
-
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', resize)
-      window.addEventListener('mouseup', stopResizingWrapper)
-      document.body.style.userSelect = 'none'
-      document.body.style.cursor = 'col-resize'
-    } else {
-      window.removeEventListener('mousemove', resize)
-      window.removeEventListener('mouseup', stopResizingWrapper)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-    }
-    return () => {
-      window.removeEventListener('mousemove', resize)
-      window.removeEventListener('mouseup', stopResizingWrapper)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-    }
-  }, [isResizing, resize, stopResizingWrapper])
 
   const handleSendMessage = async (content: string) => {
     if (!vaultPath || !activeNotebook) return
@@ -504,32 +457,10 @@ function App() {
     navigator.clipboard.writeText(content)
   }, [])
 
-  const handleOpenSettings = useCallback((section?: SettingsSection) => {
+  const handleOpenSettings = useCallback(() => {
     setSettingsSection('general')
     setIsSettingsOpen(true)
   }, [])
-
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        if (!isSettingsOpen) {
-          setSettingsSection('general')
-        }
-        setIsSettingsOpen((prev) => !prev)
-        return
-      }
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        if (isCommandOpen && e.ctrlKey && !e.metaKey) {
-          return
-        }
-        e.preventDefault()
-        setIsCommandOpen((prev) => !prev)
-      }
-    }
-    document.addEventListener('keydown', down)
-    return () => document.removeEventListener('keydown', down)
-  }, [isCommandOpen])
 
   const currentNotebook = allNotebooks.find(
     (nb) => nb.relativePath === activeNotebook
@@ -552,38 +483,11 @@ function App() {
 
   if (isVaultSetupOpen || !vaultPath) {
     return (
-      <ThemeProvider initialSettings={appSettings} vaultPath={null}>
-        <div className="h-screen w-screen bg-transparent font-sans text-textMain">
-          <div className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background">
-            <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
-            <div className="flex-1 flex items-center justify-center">
-              <div className="max-w-md w-full mx-4 bg-surface border border-border rounded-2xl p-8 shadow-2xl">
-                <div className="flex flex-col items-center text-center gap-6">
-                  <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-brand/20 to-brand/5 border border-brand/20 flex items-center justify-center">
-                    <FolderOpen className="w-8 h-8 text-brand" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl font-bold mb-2">
-                      Welcome to {appSettings.appName}
-                    </h1>
-                    <p className="text-textMuted text-sm">
-                      To get started, select or create a folder where your notes
-                      will be stored. This will be your vault - all notebooks
-                      and notes will live here.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleSelectVault}
-                    className="w-full bg-brand hover:bg-brand/90 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                  >
-                    Select Vault Folder
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </ThemeProvider>
+      <VaultSetup
+        appSettings={appSettings}
+        onSelectVault={handleSelectVault}
+        onOpenCommandPalette={() => setIsCommandOpen(true)}
+      />
     )
   }
 
@@ -633,25 +537,11 @@ function App() {
             )}
 
             <div className="flex-1 flex flex-col min-w-0 bg-background relative shadow-2xl">
-              <div className="h-16 border-b border-border/40 flex items-center pl-4 pr-8 justify-between bg-glass backdrop-blur-md z-20 absolute top-0 left-0 right-0">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <button
-                    onClick={toggleSidebar}
-                    className="p-2 rounded-md text-textMuted/60 hover:text-textMain hover:bg-surfaceHighlight/50 transition-colors"
-                    title={isSidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-                  >
-                    {isSidebarCollapsed ? (
-                      <PanelLeft size={18} />
-                    ) : (
-                      <PanelLeftClose size={18} />
-                    )}
-                  </button>
-                  <Hash className="text-textMuted/50" size={20} />
-                  <span className="font-bold text-textMain text-base tracking-tight leading-none">
-                    {currentNotebook?.name}
-                  </span>
-                </div>
-              </div>
+              <NotebookHeader
+                notebookName={currentNotebook?.name}
+                isSidebarCollapsed={isSidebarCollapsed}
+                onToggleSidebar={toggleSidebar}
+              />
 
               <div className="flex-1 flex flex-row min-h-0 pt-16 relative bg-[#050505]">
                 <div className="flex-1 flex flex-col min-w-0 z-0">

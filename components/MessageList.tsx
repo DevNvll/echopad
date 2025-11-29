@@ -14,12 +14,17 @@ const EditTextarea: React.FC<{
 }> = React.memo(({ initialContent, onSubmit, onCancel }) => {
   const [content, setContent] = useState(initialContent)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const hasChanges = content !== initialContent
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.focus()
       textareaRef.current.style.height = 'auto'
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+      textareaRef.current.setSelectionRange(
+        textareaRef.current.value.length,
+        textareaRef.current.value.length
+      )
     }
   }, [])
 
@@ -35,7 +40,18 @@ const EditTextarea: React.FC<{
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full animate-in fade-in duration-150">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+          <Edit2 size={11} />
+          <span>Editing message</span>
+        </div>
+        {hasChanges && (
+          <span className="text-[10px] text-textMuted/60 italic">
+            (unsaved changes)
+          </span>
+        )}
+      </div>
       <textarea
         ref={textareaRef}
         value={content}
@@ -45,29 +61,40 @@ const EditTextarea: React.FC<{
           e.target.style.height = e.target.scrollHeight + 'px'
         }}
         onKeyDown={handleKeyDown}
-        className="w-full bg-surfaceHighlight border border-border/60 rounded-md p-3 text-[15px] text-textMain focus:outline-none focus:border-brand/50 resize-none overflow-hidden font-sans leading-relaxed"
+        className="w-full bg-black/40 border border-amber-500/20 rounded-lg p-3 text-[15px] text-textMain focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 resize-none overflow-hidden font-sans leading-relaxed transition-all shadow-inner"
         rows={1}
       />
-      <div className="text-[11px] text-textMuted mt-2 flex gap-2">
-        <span>
-          escape to{' '}
-          <span
+      <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center gap-3 text-[11px] text-textMuted/70">
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] font-mono">
+              Esc
+            </kbd>
+            <span className="ml-1">cancel</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] font-mono">
+              Enter
+            </kbd>
+            <span className="ml-1">save</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
             onClick={onCancel}
-            className="text-brand hover:underline cursor-pointer"
+            className="h-7 px-3 text-[12px] font-medium text-textMuted hover:text-textMain bg-white/5 hover:bg-white/10 rounded-md transition-all"
           >
-            cancel
-          </span>
-        </span>
-        <span>•</span>
-        <span>
-          enter to{' '}
-          <span
+            Cancel
+          </button>
+          <button
             onClick={() => content.trim() && onSubmit(content)}
-            className="text-brand hover:underline cursor-pointer"
+            disabled={!content.trim() || !hasChanges}
+            className="h-7 px-3 text-[12px] font-medium text-black bg-amber-500 hover:bg-amber-400 rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
-            save
-          </span>
-        </span>
+            <Check size={12} />
+            Save
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -323,11 +350,11 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
                     }
                   }}
                   className={clsx(
-                    'group relative transition-colors duration-100',
+                    'group relative transition-all duration-200',
                     isSearching
                       ? 'mx-3 mt-4 pb-4 border-b border-border/30 last:border-0 cursor-pointer hover:bg-surfaceHighlight/40 hover:border-border/60 rounded-xl px-4'
                       : isEditing
-                      ? 'bg-surfaceHighlight/30 pl-[80px] pr-8 py-3 mt-1'
+                      ? 'bg-amber-500/5 border-l-2 border-l-amber-500/60 pl-[78px] pr-8 py-4 mt-2 mb-2 rounded-r-lg'
                       : 'hover:bg-surface pl-[80px] pr-8 pt-1.5 pb-1.5',
                     !isSearching && !isEditing && (isGrouped ? 'mt-0' : 'mt-5')
                   )}
@@ -344,9 +371,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
                     </div>
                   )}
 
-                  {!isSearching && (
+                  {!isSearching && !isEditing && (
                     <div className="absolute left-0 top-0 w-[80px] flex justify-end pr-5 select-none">
-                      {!isGrouped || isEditing ? (
+                      {!isGrouped ? (
                         <span className="text-[11px] font-bold text-textMuted/60 uppercase tracking-wide mt-[7px]">
                           {new Date(note.createdAt).toLocaleTimeString([], {
                             hour: '2-digit',
@@ -372,6 +399,16 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
                         <span className="text-[12px] font-bold text-brand/80 tracking-wide">
                           {dateLabel}
                         </span>
+                      </div>
+                    )}
+                    {isEditing && (
+                      <div className="mb-2 text-[11px] text-textMuted/50">
+                        Created {dateLabel} at{' '}
+                        {new Date(note.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false
+                        })}
                       </div>
                     )}
 
