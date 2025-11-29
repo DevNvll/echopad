@@ -33,6 +33,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { Hash, Trash2, Edit2, Copy, FolderOpen, FolderPlus, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TitleBar } from './components/TitleBar';
+import { SplashScreen } from './components/SplashScreen';
 
 function App() {
   const [vaultPath, setVaultPathState] = useState<string | null>(null);
@@ -50,6 +51,8 @@ function App() {
   const [isResizing, setIsResizing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isNotebooksLoaded, setIsNotebooksLoaded] = useState(false);
+  const [isTagsLoaded, setIsTagsLoaded] = useState(false);
 
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'delete' | 'create-sub'>('create');
@@ -93,6 +96,7 @@ function App() {
     const loadNotebooks = async () => {
       const nbs = await listNotebooks(vaultPath);
       setNotebooks(nbs);
+      setIsNotebooksLoaded(true);
     };
     loadNotebooks();
   }, [vaultPath]);
@@ -104,6 +108,7 @@ function App() {
       await syncVaultTags(vaultPath);
       const tags = await getAllTags();
       setAllTags(tags);
+      setIsTagsLoaded(true);
     };
     loadTags();
   }, [vaultPath]);
@@ -438,6 +443,12 @@ function App() {
   }, [isCommandOpen]);
 
   const currentNotebook = allNotebooks.find(nb => nb.relativePath === activeNotebook);
+
+  const isFullyLoaded = isInitialized && (!vaultPath || (isNotebooksLoaded && isTagsLoaded));
+
+  if (!isFullyLoaded) {
+    return <SplashScreen isVisible={true} />;
+  }
 
   if (isVaultSetupOpen || !vaultPath) {
     return (
