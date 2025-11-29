@@ -1,4 +1,10 @@
-import { Trash2, AlertTriangle, Folder, FileText, FolderTree } from 'lucide-react'
+import {
+  Trash2,
+  AlertTriangle,
+  Folder,
+  FileText,
+  FolderTree
+} from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -7,25 +13,28 @@ import {
   DialogFooter,
   DialogDescription
 } from '@/components/ui/dialog'
-import { Notebook } from '@/types'
+import { useCallback } from 'react'
+import { useVaultStore, useNotebookStore, useUIStore } from '../../stores'
 
-interface DeleteNotebookModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: () => void
-  notebook: Notebook | null
-}
+export function DeleteNotebookModal() {
+  const { vaultPath } = useVaultStore()
+  const { deleteNotebook } = useNotebookStore()
+  const { isDeleteModalOpen, targetNotebook, closeDeleteModal } = useUIStore()
 
-export function DeleteNotebookModal({
-  isOpen,
-  onClose,
-  onSubmit,
-  notebook
-}: DeleteNotebookModalProps) {
-  const hasChildren = notebook?.children && notebook.children.length > 0
+  const hasChildren =
+    targetNotebook?.children && targetNotebook.children.length > 0
+
+  const handleSubmit = useCallback(async () => {
+    if (!vaultPath || !targetNotebook) return
+    await deleteNotebook(vaultPath, targetNotebook.relativePath)
+    closeDeleteModal()
+  }, [vaultPath, targetNotebook, deleteNotebook, closeDeleteModal])
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={isDeleteModalOpen}
+      onOpenChange={(open) => !open && closeDeleteModal()}
+    >
       <DialogContent
         className="w-full max-w-md p-0 gap-0 bg-[#0c0c0e] border-border/60 overflow-hidden"
         showCloseButton={false}
@@ -54,12 +63,10 @@ export function DeleteNotebookModal({
                 <p className="text-textMain">
                   You are about to delete{' '}
                   <span className="font-semibold text-red-400">
-                    {notebook?.name}
+                    {targetNotebook?.name}
                   </span>
                 </p>
-                <p className="text-textMuted">
-                  This will permanently remove:
-                </p>
+                <p className="text-textMuted">This will permanently remove:</p>
                 <ul className="space-y-1.5 text-textMuted">
                   <li className="flex items-center gap-2">
                     <FileText size={14} className="text-red-400/70" />
@@ -79,21 +86,25 @@ export function DeleteNotebookModal({
           <div className="flex items-center gap-3 text-sm bg-surfaceHighlight/40 rounded-lg px-3 py-2.5 border border-border/30">
             <Folder size={16} className="text-red-400/70 shrink-0" />
             <div className="min-w-0">
-              <p className="font-medium text-textMain truncate">{notebook?.name}</p>
-              <p className="text-xs text-textMuted truncate">{notebook?.relativePath}</p>
+              <p className="font-medium text-textMain truncate">
+                {targetNotebook?.name}
+              </p>
+              <p className="text-xs text-textMuted truncate">
+                {targetNotebook?.relativePath}
+              </p>
             </div>
           </div>
         </div>
 
         <DialogFooter className="px-6 py-4 bg-[#080809] border-t border-border/30 flex-row justify-end gap-3">
           <button
-            onClick={onClose}
+            onClick={closeDeleteModal}
             className="px-4 py-2 text-sm font-medium text-textMuted hover:text-textMain transition-colors"
           >
             Cancel
           </button>
           <button
-            onClick={onSubmit}
+            onClick={handleSubmit}
             className="px-5 py-2 text-sm font-semibold rounded-lg bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all active:scale-[0.98]"
           >
             Delete Notebook
@@ -103,4 +114,3 @@ export function DeleteNotebookModal({
     </Dialog>
   )
 }
-

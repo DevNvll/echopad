@@ -1,72 +1,91 @@
-import React from 'react';
-import { Command } from 'cmdk';
-import { Notebook, Note } from '../../types';
-import { TagWithCount } from '../../api';
-import { CommandInput } from './CommandInput';
-import { CommandFooter } from './CommandFooter';
-import { useCommandSearch } from './hooks/useCommandSearch';
+import React from 'react'
+import { Command } from 'cmdk'
+import { Note } from '../../types'
+import { CommandInput } from './CommandInput'
+import { CommandFooter } from './CommandFooter'
+import { useCommandSearch } from './hooks/useCommandSearch'
 import {
   AppCommandsGroup,
   NotebooksGroup,
   TagsGroup,
-  SearchResultsGroup,
-} from './groups';
+  SearchResultsGroup
+} from './groups'
+import {
+  useVaultStore,
+  useNotebookStore,
+  useNotesStore,
+  useTagsStore,
+  useUIStore
+} from '../../stores'
 
-interface CommandPaletteProps {
-  isOpen: boolean;
-  setIsOpen: (open: boolean) => void;
-  notebooks: Notebook[];
-  vaultPath: string | null;
-  onSelectNotebook: (relativePath: string) => void;
-  onSelectMessage: (note: Note) => void;
-  onCreateNotebook: () => void;
-  onOpenSettings: (section?: 'general' | 'storage' | 'appearance' | 'about') => void;
-  allTags?: TagWithCount[];
-  initialSearch?: string;
-}
+export const CommandPalette: React.FC = () => {
+  const { vaultPath } = useVaultStore()
+  const { notebooks, selectNotebook } = useNotebookStore()
+  const { setTarget } = useNotesStore()
+  const { allTags } = useTagsStore()
+  const {
+    isCommandOpen,
+    commandInitialSearch,
+    closeCommand,
+    openCreateModal,
+    openSettings
+  } = useUIStore()
 
-export const CommandPalette: React.FC<CommandPaletteProps> = ({
-  isOpen,
-  setIsOpen,
-  notebooks,
-  vaultPath,
-  onSelectNotebook,
-  onSelectMessage,
-  onCreateNotebook,
-  onOpenSettings,
-  allTags = [],
-  initialSearch = '',
-}) => {
   const { search, setSearch, results, filteredTags } = useCommandSearch({
-    isOpen,
+    isOpen: isCommandOpen,
     vaultPath,
     allTags,
-    initialSearch,
-  });
+    initialSearch: commandInitialSearch
+  })
 
-  const handleClose = () => setIsOpen(false);
+  const handleClose = () => closeCommand()
+
+  const handleSelectNotebook = (relativePath: string) => {
+    selectNotebook(relativePath)
+    handleClose()
+  }
+
+  const handleSelectMessage = (note: Note) => {
+    if (note.notebookName) {
+      setTarget(note.filename)
+      selectNotebook(note.notebookName)
+    }
+    handleClose()
+  }
+
+  const handleCreateNotebook = () => {
+    openCreateModal()
+    handleClose()
+  }
+
+  const handleOpenSettings = (
+    section?: 'general' | 'storage' | 'appearance' | 'about'
+  ) => {
+    openSettings(section)
+    handleClose()
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.ctrlKey && e.key === 'j') {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault()
+      e.stopPropagation()
       document.activeElement?.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
-      );
+      )
     }
     if (e.ctrlKey && e.key === 'k') {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault()
+      e.stopPropagation()
       document.activeElement?.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })
-      );
+      )
     }
-  };
+  }
 
   return (
     <Command.Dialog
-      open={isOpen}
-      onOpenChange={setIsOpen}
+      open={isCommandOpen}
+      onOpenChange={(open) => (open ? null : closeCommand())}
       loop
       label="Global Command Menu"
       onKeyDown={handleKeyDown}
@@ -81,14 +100,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         </Command.Empty>
 
         <AppCommandsGroup
-          onCreateNotebook={onCreateNotebook}
-          onOpenSettings={onOpenSettings}
+          onCreateNotebook={handleCreateNotebook}
+          onOpenSettings={handleOpenSettings}
           onClose={handleClose}
         />
 
         <NotebooksGroup
           notebooks={notebooks}
-          onSelectNotebook={onSelectNotebook}
+          onSelectNotebook={handleSelectNotebook}
           onClose={handleClose}
         />
 
@@ -99,13 +118,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
         <SearchResultsGroup
           results={results}
-          onSelectNote={onSelectMessage}
+          onSelectNote={handleSelectMessage}
           onClose={handleClose}
         />
       </Command.List>
 
       <CommandFooter />
     </Command.Dialog>
-  );
-};
-
+  )
+}

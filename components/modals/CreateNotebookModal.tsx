@@ -9,36 +9,41 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Notebook } from '@/types'
+import { useVaultStore, useNotebookStore, useUIStore } from '../../stores'
 
-interface CreateNotebookModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: (name: string) => void
-  parentNotebook?: Notebook | null
-}
+export function CreateNotebookModal() {
+  const { vaultPath } = useVaultStore()
+  const { createNotebook, selectNotebook } = useNotebookStore()
+  const { isCreateModalOpen, parentNotebook, closeCreateModal } = useUIStore()
 
-export function CreateNotebookModal({
-  isOpen,
-  onClose,
-  onSubmit,
-  parentNotebook
-}: CreateNotebookModalProps) {
   const [name, setName] = useState('')
 
   const isSubnotebook = !!parentNotebook
 
   useEffect(() => {
-    if (isOpen) {
+    if (isCreateModalOpen) {
       setName('')
     }
-  }, [isOpen])
+  }, [isCreateModalOpen])
 
-  const handleSubmit = useCallback(() => {
-    if (!name.trim()) return
-    onSubmit(name.trim())
+  const handleSubmit = useCallback(async () => {
+    if (!name.trim() || !vaultPath) return
+    const nb = await createNotebook(
+      vaultPath,
+      name.trim(),
+      parentNotebook?.relativePath
+    )
     setName('')
-  }, [name, onSubmit])
+    closeCreateModal()
+    selectNotebook(nb.relativePath)
+  }, [
+    name,
+    vaultPath,
+    createNotebook,
+    parentNotebook,
+    closeCreateModal,
+    selectNotebook
+  ])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -51,7 +56,10 @@ export function CreateNotebookModal({
   )
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={isCreateModalOpen}
+      onOpenChange={(open) => !open && closeCreateModal()}
+    >
       <DialogContent
         className="w-full max-w-md p-0 gap-0 bg-[#0c0c0e] border-border/60 overflow-hidden"
         showCloseButton={false}
@@ -104,7 +112,7 @@ export function CreateNotebookModal({
 
         <DialogFooter className="px-6 py-4 bg-[#080809] border-t border-border/30 flex-row justify-end gap-3">
           <button
-            onClick={onClose}
+            onClick={closeCreateModal}
             className="px-4 py-2 text-sm font-medium text-textMuted hover:text-textMain transition-colors"
           >
             Cancel
@@ -121,4 +129,3 @@ export function CreateNotebookModal({
     </Dialog>
   )
 }
-

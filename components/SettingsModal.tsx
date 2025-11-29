@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Settings, Palette, Info, X, HardDrive } from 'lucide-react'
+import { open } from '@tauri-apps/plugin-dialog'
 import {
   Dialog,
   DialogContent,
@@ -15,17 +16,9 @@ import {
   AppearanceSettings,
   AboutSettings
 } from './settings'
+import { useVaultStore, useUIStore } from '../stores'
 
 export type SettingsSection = 'general' | 'storage' | 'appearance' | 'about'
-
-interface SettingsModalProps {
-  isOpen: boolean
-  onClose: () => void
-  vaultPath: string | null
-  onAddVault: () => void
-  onSwitchVault: (path: string) => void
-  initialSection?: SettingsSection
-}
 
 const NAV_ITEMS: {
   id: SettingsSection
@@ -38,14 +31,10 @@ const NAV_ITEMS: {
   { id: 'about', label: 'About', icon: <Info size={16} /> }
 ]
 
-export function SettingsModal({
-  isOpen,
-  onClose,
-  vaultPath,
-  onAddVault,
-  onSwitchVault,
-  initialSection
-}: SettingsModalProps) {
+export function SettingsModal() {
+  const { vaultPath, selectVault, switchVault } = useVaultStore()
+  const { isSettingsOpen, settingsSection, closeSettings } = useUIStore()
+
   const {
     settings,
     updateAccentColor,
@@ -53,7 +42,7 @@ export function SettingsModal({
     updateAppName
   } = useTheme()
   const [activeSection, setActiveSection] = useState<SettingsSection>(
-    initialSection || 'general'
+    settingsSection || 'general'
   )
   const [localAppName, setLocalAppName] = useState(settings.appName)
   const [showColorPicker, setShowColorPicker] = useState(false)
@@ -67,17 +56,17 @@ export function SettingsModal({
   }, [])
 
   useEffect(() => {
-    if (isOpen) {
+    if (isSettingsOpen) {
       loadVaults()
-      setActiveSection(initialSection || 'general')
+      setActiveSection(settingsSection || 'general')
     }
-  }, [isOpen, loadVaults, initialSection])
+  }, [isSettingsOpen, loadVaults, settingsSection])
 
   useEffect(() => {
-    if (isOpen) {
+    if (isSettingsOpen) {
       setLocalAppName(settings.appName)
     }
-  }, [isOpen, settings.appName])
+  }, [isSettingsOpen, settings.appName])
 
   const handleAppNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,21 +96,32 @@ export function SettingsModal({
     [loadVaults]
   )
 
-  const handleAddVault = useCallback(() => {
-    onAddVault()
-    onClose()
-  }, [onAddVault, onClose])
+  const handleAddVault = useCallback(async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: 'Select Vault Folder'
+    })
+
+    if (selected && typeof selected === 'string') {
+      await selectVault(selected)
+      closeSettings()
+    }
+  }, [selectVault, closeSettings])
 
   const handleSwitchVault = useCallback(
     (path: string) => {
-      onSwitchVault(path)
-      onClose()
+      switchVault(path)
+      closeSettings()
     },
-    [onSwitchVault, onClose]
+    [switchVault, closeSettings]
   )
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={isSettingsOpen}
+      onOpenChange={(open) => !open && closeSettings()}
+    >
       <DialogContent
         className="w-full max-w-4xl p-0 gap-0 bg-surface border-border overflow-hidden"
         showCloseButton={false}
@@ -131,7 +131,7 @@ export function SettingsModal({
             Settings
           </DialogTitle>
           <button
-            onClick={onClose}
+            onClick={closeSettings}
             className="p-1.5 rounded-md text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors"
           >
             <X size={16} />

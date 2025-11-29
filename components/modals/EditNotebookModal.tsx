@@ -9,33 +9,26 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Notebook } from '@/types'
+import { useVaultStore, useNotebookStore, useUIStore } from '../../stores'
 
-interface EditNotebookModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: (name: string) => void
-  notebook: Notebook | null
-}
+export function EditNotebookModal() {
+  const { vaultPath } = useVaultStore()
+  const { updateNotebook } = useNotebookStore()
+  const { isEditModalOpen, targetNotebook, closeEditModal } = useUIStore()
 
-export function EditNotebookModal({
-  isOpen,
-  onClose,
-  onSubmit,
-  notebook
-}: EditNotebookModalProps) {
   const [name, setName] = useState('')
 
   useEffect(() => {
-    if (isOpen && notebook) {
-      setName(notebook.name)
+    if (isEditModalOpen && targetNotebook) {
+      setName(targetNotebook.name)
     }
-  }, [isOpen, notebook])
+  }, [isEditModalOpen, targetNotebook])
 
-  const handleSubmit = useCallback(() => {
-    if (!name.trim()) return
-    onSubmit(name.trim())
-  }, [name, onSubmit])
+  const handleSubmit = useCallback(async () => {
+    if (!name.trim() || !vaultPath || !targetNotebook) return
+    await updateNotebook(vaultPath, targetNotebook.relativePath, name.trim())
+    closeEditModal()
+  }, [name, vaultPath, targetNotebook, updateNotebook, closeEditModal])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -47,10 +40,13 @@ export function EditNotebookModal({
     [handleSubmit, name]
   )
 
-  const hasChanges = name.trim() !== notebook?.name
+  const hasChanges = name.trim() !== targetNotebook?.name
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={isEditModalOpen}
+      onOpenChange={(open) => !open && closeEditModal()}
+    >
       <DialogContent
         className="w-full max-w-md p-0 gap-0 bg-[#0c0c0e] border-border/60 overflow-hidden"
         showCloseButton={false}
@@ -75,7 +71,7 @@ export function EditNotebookModal({
           <div className="flex items-center gap-2 text-sm text-textMuted bg-surfaceHighlight/40 rounded-lg px-3 py-2.5 border border-border/30">
             <Folder size={14} className="text-textMuted/70 shrink-0" />
             <span className="truncate font-medium text-textMain">
-              {notebook?.name}
+              {targetNotebook?.name}
             </span>
             <span className="text-textMuted/50">→</span>
             <span className="truncate text-amber-400 font-medium">
@@ -103,7 +99,7 @@ export function EditNotebookModal({
 
         <DialogFooter className="px-6 py-4 bg-[#080809] border-t border-border/30 flex-row justify-end gap-3">
           <button
-            onClick={onClose}
+            onClick={closeEditModal}
             className="px-4 py-2 text-sm font-medium text-textMuted hover:text-textMain transition-colors"
           >
             Cancel
@@ -120,4 +116,3 @@ export function EditNotebookModal({
     </Dialog>
   )
 }
-
