@@ -30,3 +30,8 @@ export interface SearchFilters {
   textTokens: string[];
   isOrSearch: boolean;
 }
+
+export interface AppSettings {
+  appName: string;
+  accentColor: string;
+}

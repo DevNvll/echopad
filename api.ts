@@ -1,7 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import Database from '@tauri-apps/plugin-sql';
-import { Note, NoteMetadata, Notebook } from './types';
+import { Note, NoteMetadata, Notebook, AppSettings } from './types';
 import { extractTags, extractUrls } from './utils/formatting';
+
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  appName: 'Lazuli',
+  accentColor: '#818cf8',
+};
 
 let db: Database | null = null;
 
@@ -326,5 +331,20 @@ export async function searchByTag(vaultPath: string, tag: string): Promise<Note[
   }
   
   return notes.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  const appName = await getSetting<string>('appName', DEFAULT_APP_SETTINGS.appName);
+  const accentColor = await getSetting<string>('accentColor', DEFAULT_APP_SETTINGS.accentColor);
+  return { appName, accentColor };
+}
+
+export async function saveAppSettings(settings: Partial<AppSettings>): Promise<void> {
+  if (settings.appName !== undefined) {
+    await saveSetting('appName', settings.appName);
+  }
+  if (settings.accentColor !== undefined) {
+    await saveSetting('accentColor', settings.accentColor);
+  }
 }
 

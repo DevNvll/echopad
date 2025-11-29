@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Notebook } from '../types';
-import { Hash, Plus, Pin, PinOff, ChevronDown, ChevronRight, FolderOpen, Check } from 'lucide-react';
+import { Hash, Plus, Pin, PinOff, ChevronDown, ChevronRight, FolderOpen, Check, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface SidebarProps {
@@ -14,6 +14,7 @@ interface SidebarProps {
   width: number;
   vaultPath: string | null;
   onChangeVault: () => void;
+  onOpenSettings: () => void;
 }
 
 const flattenAllNotebooks = (notebooks: Notebook[]): Notebook[] => {
@@ -158,7 +159,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTogglePin,
   width,
   vaultPath,
-  onChangeVault
+  onChangeVault,
+  onOpenSettings
 }) => {
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -344,6 +346,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="px-3 py-3 border-t border-border/30">
+        <button
+          onClick={onOpenSettings}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-textMuted hover:text-textMain hover:bg-surfaceHighlight/50 transition-colors group"
+        >
+          <Settings size={16} className="text-textMuted/60 group-hover:text-textMuted" />
+          <span className="text-[13px] font-medium">Settings</span>
+        </button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Notebook, Note } from './types';
+import { Notebook, Note, AppSettings } from './types';
 import { extractTags, extractUrls } from './utils/formatting';
 import {
   getVaultPath,
@@ -22,7 +22,8 @@ import {
   syncNoteTags,
   removeNoteTags,
   getAllTags,
-  TagWithCount
+  TagWithCount,
+  getAppSettings
 } from './api';
 import { Sidebar } from './components/Sidebar';
 import { InputArea } from './components/InputArea';
@@ -30,10 +31,12 @@ import { MessageList } from './components/MessageList';
 import { Modal } from './components/Modal';
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu';
 import { CommandPalette } from './components/CommandPalette';
+import { SettingsModal } from './components/SettingsModal';
 import { Hash, Trash2, Edit2, Copy, FolderOpen, FolderPlus, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TitleBar } from './components/TitleBar';
 import { SplashScreen } from './components/SplashScreen';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
   const [vaultPath, setVaultPathState] = useState<string | null>(null);
@@ -61,6 +64,8 @@ function App() {
   const [parentNotebook, setParentNotebook] = useState<Notebook | null>(null);
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -72,6 +77,9 @@ function App() {
   useEffect(() => {
     const loadSettings = async () => {
       const vault = await getVaultPath();
+      const settings = await getAppSettings();
+      setAppSettings(settings);
+      
       if (vault) {
         setVaultPathState(vault);
         const savedWidth = await getSetting<number>('sidebarWidth', 260);
@@ -428,8 +436,17 @@ function App() {
     navigator.clipboard.writeText(content);
   }, []);
 
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true);
+  }, []);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsSettingsOpen(prev => !prev);
+        return;
+      }
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         if (isCommandOpen && e.ctrlKey && !e.metaKey) {
           return;
@@ -444,75 +461,79 @@ function App() {
 
   const currentNotebook = allNotebooks.find(nb => nb.relativePath === activeNotebook);
 
-  const isFullyLoaded = isInitialized && (!vaultPath || (isNotebooksLoaded && isTagsLoaded));
+  const isFullyLoaded = isInitialized && appSettings && (!vaultPath || (isNotebooksLoaded && isTagsLoaded));
 
-  if (!isFullyLoaded) {
+  if (!isFullyLoaded || !appSettings) {
     return <SplashScreen isVisible={true} />;
   }
 
   if (isVaultSetupOpen || !vaultPath) {
     return (
-      <div className="h-screen w-screen bg-transparent font-sans text-textMain">
-        <div className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background">
-          <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
-          <div className="flex-1 flex items-center justify-center">
-            <div className="max-w-md w-full mx-4 bg-surface border border-border rounded-2xl p-8 shadow-2xl">
-              <div className="flex flex-col items-center text-center gap-6">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand/20 to-brand/5 border border-brand/20 flex items-center justify-center">
-                  <FolderOpen className="w-8 h-8 text-brand" />
+      <ThemeProvider initialSettings={appSettings}>
+        <div className="h-screen w-screen bg-transparent font-sans text-textMain">
+          <div className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background">
+            <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
+            <div className="flex-1 flex items-center justify-center">
+              <div className="max-w-md w-full mx-4 bg-surface border border-border rounded-2xl p-8 shadow-2xl">
+                <div className="flex flex-col items-center text-center gap-6">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand/20 to-brand/5 border border-brand/20 flex items-center justify-center">
+                    <FolderOpen className="w-8 h-8 text-brand" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold mb-2">Welcome to {appSettings.appName}</h1>
+                    <p className="text-textMuted text-sm">
+                      To get started, select or create a folder where your notes will be stored. 
+                      This will be your vault - all notebooks and notes will live here.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSelectVault}
+                    className="w-full bg-brand hover:bg-brand/90 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Select Vault Folder
+                  </button>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold mb-2">Welcome to Lazuli</h1>
-                  <p className="text-textMuted text-sm">
-                    To get started, select or create a folder where your notes will be stored. 
-                    This will be your vault - all notebooks and notes will live here.
-                  </p>
-                </div>
-                <button
-                  onClick={handleSelectVault}
-                  className="w-full bg-brand hover:bg-brand/90 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                >
-                  Select Vault Folder
-                </button>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </ThemeProvider>
     );
   }
 
   return (
-    <div className="h-screen w-screen bg-transparent font-sans text-textMain">
-      <div 
-        className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background"
-        onClick={() => setContextMenu(null)}
-      >
-        <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
-        <div className="flex flex-1 min-h-0">
-          {!isSidebarCollapsed && (
-        <>
-          <Sidebar 
-            notebooks={notebooks}
-            activeNotebook={activeNotebook}
-            onSelectNotebook={handleSelectNotebook}
-            onCreateNotebook={() => {
-              setModalMode('create');
-              setNotebookFormName('');
-              setIsNotebookModalOpen(true);
-            }}
-            onCreateSubnotebook={(parent) => {
-              setModalMode('create-sub');
-              setParentNotebook(parent);
-              setNotebookFormName('');
-              setIsNotebookModalOpen(true);
-            }}
-            onContextMenu={onNotebookContextMenu}
-            onTogglePin={handleTogglePin}
-            width={sidebarWidth}
-            vaultPath={vaultPath}
-            onChangeVault={handleSelectVault}
-          />
+    <ThemeProvider initialSettings={appSettings}>
+      <div className="h-screen w-screen bg-transparent font-sans text-textMain">
+        <div 
+          className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background"
+          onClick={() => setContextMenu(null)}
+        >
+          <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
+          <div className="flex flex-1 min-h-0">
+            {!isSidebarCollapsed && (
+          <>
+            <Sidebar 
+              notebooks={notebooks}
+              activeNotebook={activeNotebook}
+              onSelectNotebook={handleSelectNotebook}
+              onCreateNotebook={() => {
+                setModalMode('create');
+                setNotebookFormName('');
+                setIsNotebookModalOpen(true);
+              }}
+              onCreateSubnotebook={(parent) => {
+                setModalMode('create-sub');
+                setParentNotebook(parent);
+                setNotebookFormName('');
+                setIsNotebookModalOpen(true);
+              }}
+              onContextMenu={onNotebookContextMenu}
+              onTogglePin={handleTogglePin}
+              width={sidebarWidth}
+              vaultPath={vaultPath}
+              onChangeVault={handleSelectVault}
+              onOpenSettings={handleOpenSettings}
+            />
 
           <div
             className={clsx(
@@ -567,24 +588,30 @@ function App() {
         </div>
       </div>
 
-      <CommandPalette 
-        isOpen={isCommandOpen}
-        setIsOpen={(open) => {
-          setIsCommandOpen(open);
-          if (!open) setCommandInitialSearch('');
-        }}
-        notebooks={notebooks}
-        vaultPath={vaultPath}
-        onSelectNotebook={handleSelectNotebook}
-        onSelectMessage={handleSearchResultClick}
-        onCreateNotebook={() => {
-          setModalMode('create');
-          setNotebookFormName('');
-          setIsNotebookModalOpen(true);
-        }}
-        allTags={allTags}
-        initialSearch={commandInitialSearch}
-      />
+        <CommandPalette 
+          isOpen={isCommandOpen}
+          setIsOpen={(open) => {
+            setIsCommandOpen(open);
+            if (!open) setCommandInitialSearch('');
+          }}
+          notebooks={notebooks}
+          vaultPath={vaultPath}
+          onSelectNotebook={handleSelectNotebook}
+          onSelectMessage={handleSearchResultClick}
+          onCreateNotebook={() => {
+            setModalMode('create');
+            setNotebookFormName('');
+            setIsNotebookModalOpen(true);
+          }}
+          onOpenSettings={handleOpenSettings}
+          allTags={allTags}
+          initialSearch={commandInitialSearch}
+        />
+
+        <SettingsModal 
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
 
       {contextMenu && (
         <ContextMenu
@@ -655,10 +682,11 @@ function App() {
             </div>
           </div>
         )}
-      </Modal>
+        </Modal>
+          </div>
         </div>
       </div>
-    </div>
+    </ThemeProvider>
   );
 }
 

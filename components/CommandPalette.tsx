@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Command } from 'cmdk';
-import { Hash, Plus, Search, FileText, CornerDownLeft, Calendar, Tag } from 'lucide-react';
+import { Hash, Plus, Search, FileText, CornerDownLeft, Calendar, Tag, Settings } from 'lucide-react';
 import { Notebook, Note } from '../types';
 import { searchNotes, searchByTag, TagWithCount } from '../api';
 import { formatMessageDate } from '../utils/formatting';
@@ -14,6 +14,7 @@ interface CommandPaletteProps {
   onSelectNotebook: (relativePath: string) => void;
   onSelectMessage: (note: Note) => void;
   onCreateNotebook: () => void;
+  onOpenSettings: () => void;
   allTags?: TagWithCount[];
   initialSearch?: string;
 }
@@ -37,6 +38,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onSelectNotebook,
   onSelectMessage,
   onCreateNotebook,
+  onOpenSettings,
   allTags = [],
   initialSearch = '',
 }) => {
@@ -142,6 +144,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             <Plus className="mr-2 h-4 w-4 text-brand" />
             <span>Create New Notebook</span>
             <CommandShortcut>⌘N</CommandShortcut>
+          </CommandItem>
+          <CommandItem 
+            onSelect={() => {
+              onOpenSettings();
+              setIsOpen(false);
+            }}
+          >
+            <Settings className="mr-2 h-4 w-4 text-textMuted" />
+            <span>Open Settings</span>
+            <CommandShortcut>⌘,</CommandShortcut>
           </CommandItem>
         </Command.Group>
 
