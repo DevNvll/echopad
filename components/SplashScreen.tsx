@@ -1,9 +1,13 @@
 interface SplashScreenProps {
   isVisible: boolean;
+  appName?: string;
+  accentColor?: string;
 }
 
-export function SplashScreen({ isVisible }: SplashScreenProps) {
+export function SplashScreen({ isVisible, appName = 'Lazuli', accentColor }: SplashScreenProps) {
   if (!isVisible) return null;
+
+  const brandColor = accentColor || 'var(--accent-color)';
 
   return (
     <div 
@@ -12,12 +16,19 @@ export function SplashScreen({ isVisible }: SplashScreenProps) {
     >
       <div className="flex flex-col items-center gap-8">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand/30 to-brand/10 border border-brand/20 flex items-center justify-center shadow-glow">
+          <div 
+            className="w-16 h-16 rounded-2xl flex items-center justify-center"
+            style={{ 
+              background: `linear-gradient(to bottom right, ${brandColor}4D, ${brandColor}1A)`,
+              border: `1px solid ${brandColor}33`,
+              boxShadow: `0 0 20px -10px ${brandColor}26`
+            }}
+          >
             <svg 
               viewBox="0 0 24 24" 
               fill="none" 
-              className="w-8 h-8 text-brand"
-              stroke="currentColor" 
+              className="w-8 h-8"
+              stroke={brandColor}
               strokeWidth="1.5"
             >
               <path 
@@ -33,22 +44,22 @@ export function SplashScreen({ isVisible }: SplashScreenProps) {
             </svg>
           </div>
           <span className="text-2xl font-medium text-textMain tracking-wide">
-            lazuli
+            {appName.toLowerCase()}
           </span>
         </div>
         
         <div className="flex items-center gap-1.5">
           <span 
-            className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse"
-            style={{ animationDelay: '0ms' }}
+            className="w-1.5 h-1.5 rounded-full animate-pulse"
+            style={{ backgroundColor: brandColor, animationDelay: '0ms' }}
           />
           <span 
-            className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse"
-            style={{ animationDelay: '150ms' }}
+            className="w-1.5 h-1.5 rounded-full animate-pulse"
+            style={{ backgroundColor: brandColor, animationDelay: '150ms' }}
           />
           <span 
-            className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse"
-            style={{ animationDelay: '300ms' }}
+            className="w-1.5 h-1.5 rounded-full animate-pulse"
+            style={{ backgroundColor: brandColor, animationDelay: '300ms' }}
           />
         </div>
       </div>

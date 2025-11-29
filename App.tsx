@@ -23,7 +23,9 @@ import {
   removeNoteTags,
   getAllTags,
   TagWithCount,
-  getAppSettings
+  getAppSettings,
+  addKnownVault,
+  getVaultAccentColor
 } from './api';
 import { Sidebar } from './components/Sidebar';
 import { InputArea } from './components/InputArea';
@@ -31,7 +33,7 @@ import { MessageList } from './components/MessageList';
 import { Modal } from './components/Modal';
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu';
 import { CommandPalette } from './components/CommandPalette';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsModal, SettingsSection } from './components/SettingsModal';
 import { Hash, Trash2, Edit2, Copy, FolderOpen, FolderPlus, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TitleBar } from './components/TitleBar';
@@ -65,6 +67,7 @@ function App() {
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('general');
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
   const [contextMenu, setContextMenu] = useState<{
@@ -77,11 +80,24 @@ function App() {
   useEffect(() => {
     const loadSettings = async () => {
       const vault = await getVaultPath();
-      const settings = await getAppSettings();
+      const globalSettings = await getAppSettings();
+      
+      let accentColor = globalSettings.accentColor;
+      if (vault) {
+        const vaultColor = await getVaultAccentColor(vault);
+        if (vaultColor) {
+          accentColor = vaultColor;
+        }
+      }
+      
+      const settings = { ...globalSettings, accentColor };
       setAppSettings(settings);
+      
+      document.documentElement.style.setProperty('--accent-color', accentColor);
       
       if (vault) {
         setVaultPathState(vault);
+        await addKnownVault(vault);
         const savedWidth = await getSetting<number>('sidebarWidth', 260);
         setSidebarWidth(savedWidth);
         const collapsed = await getSetting<boolean>('sidebarCollapsed', false);
@@ -436,7 +452,8 @@ function App() {
     navigator.clipboard.writeText(content);
   }, []);
 
-  const handleOpenSettings = useCallback(() => {
+  const handleOpenSettings = useCallback((section?: SettingsSection) => {
+    setSettingsSection(section || 'general');
     setIsSettingsOpen(true);
   }, []);
 
@@ -444,6 +461,9 @@ function App() {
     const down = (e: KeyboardEvent) => {
       if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        if (!isSettingsOpen) {
+          setSettingsSection('general');
+        }
         setIsSettingsOpen(prev => !prev);
         return;
       }
@@ -464,12 +484,18 @@ function App() {
   const isFullyLoaded = isInitialized && appSettings && (!vaultPath || (isNotebooksLoaded && isTagsLoaded));
 
   if (!isFullyLoaded || !appSettings) {
-    return <SplashScreen isVisible={true} />;
+    return (
+      <SplashScreen 
+        isVisible={true} 
+        appName={appSettings?.appName}
+        accentColor={appSettings?.accentColor}
+      />
+    );
   }
 
   if (isVaultSetupOpen || !vaultPath) {
     return (
-      <ThemeProvider initialSettings={appSettings}>
+      <ThemeProvider initialSettings={appSettings} vaultPath={null}>
         <div className="h-screen w-screen bg-transparent font-sans text-textMain">
           <div className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background">
             <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
@@ -502,7 +528,7 @@ function App() {
   }
 
   return (
-    <ThemeProvider initialSettings={appSettings}>
+    <ThemeProvider initialSettings={appSettings} vaultPath={vaultPath}>
       <div className="h-screen w-screen bg-transparent font-sans text-textMain">
         <div 
           className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background"
@@ -531,8 +557,12 @@ function App() {
               onTogglePin={handleTogglePin}
               width={sidebarWidth}
               vaultPath={vaultPath}
-              onChangeVault={handleSelectVault}
               onOpenSettings={handleOpenSettings}
+              onSwitchVault={async (path) => {
+                await setVaultPath(path);
+                setVaultPathState(path);
+                window.location.reload();
+              }}
             />
 
           <div
@@ -611,6 +641,14 @@ function App() {
         <SettingsModal 
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+          vaultPath={vaultPath}
+          onAddVault={handleSelectVault}
+          onSwitchVault={async (path) => {
+            await setVaultPath(path);
+            setVaultPathState(path);
+            window.location.reload();
+          }}
+          initialSection={settingsSection}
         />
 
       {contextMenu && (

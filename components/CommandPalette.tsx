@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Command } from 'cmdk';
-import { Hash, Plus, Search, FileText, CornerDownLeft, Calendar, Tag, Settings } from 'lucide-react';
+import { Hash, Plus, Search, FileText, CornerDownLeft, Calendar, Tag, Settings, Palette, HardDrive, Info } from 'lucide-react';
 import { Notebook, Note } from '../types';
 import { searchNotes, searchByTag, TagWithCount } from '../api';
 import { formatMessageDate } from '../utils/formatting';
@@ -14,7 +14,7 @@ interface CommandPaletteProps {
   onSelectNotebook: (relativePath: string) => void;
   onSelectMessage: (note: Note) => void;
   onCreateNotebook: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (section?: 'general' | 'storage' | 'appearance' | 'about') => void;
   allTags?: TagWithCount[];
   initialSearch?: string;
 }
@@ -152,8 +152,35 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             }}
           >
             <Settings className="mr-2 h-4 w-4 text-textMuted" />
-            <span>Open Settings</span>
+            <span>Settings: General</span>
             <CommandShortcut>⌘,</CommandShortcut>
+          </CommandItem>
+          <CommandItem 
+            onSelect={() => {
+              onOpenSettings('storage');
+              setIsOpen(false);
+            }}
+          >
+            <HardDrive className="mr-2 h-4 w-4 text-textMuted" />
+            <span>Settings: Storage & Vaults</span>
+          </CommandItem>
+          <CommandItem 
+            onSelect={() => {
+              onOpenSettings('appearance');
+              setIsOpen(false);
+            }}
+          >
+            <Palette className="mr-2 h-4 w-4 text-textMuted" />
+            <span>Settings: Appearance</span>
+          </CommandItem>
+          <CommandItem 
+            onSelect={() => {
+              onOpenSettings('about');
+              setIsOpen(false);
+            }}
+          >
+            <Info className="mr-2 h-4 w-4 text-textMuted" />
+            <span>Settings: About</span>
           </CommandItem>
         </Command.Group>
 

@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { getAppSettings, saveAppSettings } from '../api';
+import { getAppSettings, saveAppSettings, getVaultAccentColor, saveVaultAccentColor, applyAccentColorToAllVaults } from '../api';
 import { AppSettings } from '../types';
 
 interface ThemeContextValue {
   settings: AppSettings;
+  vaultPath: string | null;
   updateAccentColor: (color: string) => Promise<void>;
+  updateAccentColorForAllVaults: (color: string) => Promise<void>;
   updateAppName: (name: string) => Promise<void>;
   isLoading: boolean;
 }
@@ -27,9 +29,10 @@ export function useTheme() {
 interface ThemeProviderProps {
   children: ReactNode;
   initialSettings?: AppSettings;
+  vaultPath?: string | null;
 }
 
-export function ThemeProvider({ children, initialSettings }: ThemeProviderProps) {
+export function ThemeProvider({ children, initialSettings, vaultPath = null }: ThemeProviderProps) {
   const [settings, setSettings] = useState<AppSettings>(initialSettings || defaultSettings);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -44,6 +47,22 @@ export function ThemeProvider({ children, initialSettings }: ThemeProviderProps)
   const updateAccentColor = useCallback(async (color: string) => {
     setIsLoading(true);
     try {
+      if (vaultPath) {
+        await saveVaultAccentColor(vaultPath, color);
+      } else {
+        await saveAppSettings({ accentColor: color });
+      }
+      setSettings(prev => ({ ...prev, accentColor: color }));
+      applyAccentColor(color);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [applyAccentColor, vaultPath]);
+
+  const updateAccentColorForAllVaults = useCallback(async (color: string) => {
+    setIsLoading(true);
+    try {
+      await applyAccentColorToAllVaults(color);
       await saveAppSettings({ accentColor: color });
       setSettings(prev => ({ ...prev, accentColor: color }));
       applyAccentColor(color);
@@ -63,17 +82,32 @@ export function ThemeProvider({ children, initialSettings }: ThemeProviderProps)
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ settings, updateAccentColor, updateAppName, isLoading }}>
+    <ThemeContext.Provider value={{ 
+      settings, 
+      vaultPath,
+      updateAccentColor, 
+      updateAccentColorForAllVaults,
+      updateAppName, 
+      isLoading 
+    }}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-export async function loadInitialSettings(): Promise<AppSettings> {
+export async function loadInitialSettings(vaultPath?: string | null): Promise<AppSettings> {
   try {
-    return await getAppSettings();
+    const globalSettings = await getAppSettings();
+    
+    if (vaultPath) {
+      const vaultAccentColor = await getVaultAccentColor(vaultPath);
+      if (vaultAccentColor) {
+        return { ...globalSettings, accentColor: vaultAccentColor };
+      }
+    }
+    
+    return globalSettings;
   } catch {
     return defaultSettings;
   }
 }
-

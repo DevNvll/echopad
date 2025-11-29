@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Notebook } from '../types';
 import { Hash, Plus, Pin, PinOff, ChevronDown, ChevronRight, FolderOpen, Check, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
+import { getKnownVaults, KnownVault } from '../api';
 
 interface SidebarProps {
   notebooks: Notebook[];
@@ -13,8 +14,8 @@ interface SidebarProps {
   onTogglePin: (notebook: Notebook) => void;
   width: number;
   vaultPath: string | null;
-  onChangeVault: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (section?: 'general' | 'storage' | 'appearance' | 'about') => void;
+  onSwitchVault: (path: string) => void;
 }
 
 const flattenAllNotebooks = (notebooks: Notebook[]): Notebook[] => {
@@ -159,16 +160,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTogglePin,
   width,
   vaultPath,
-  onChangeVault,
-  onOpenSettings
+  onOpenSettings,
+  onSwitchVault
 }) => {
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [knownVaults, setKnownVaults] = useState<KnownVault[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   const pinnedNotebooks = collectPinnedNotebooks(notebooks);
 
   const vaultName = vaultPath?.split(/[/\\]/).pop() || 'Unknown Vault';
+
+  useEffect(() => {
+    const loadVaults = async () => {
+      const vaults = await getKnownVaults();
+      setKnownVaults(vaults);
+    };
+    loadVaults();
+  }, [vaultPath]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -271,28 +281,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
         
         {isVaultDropdownOpen && (
           <div className="absolute top-full left-3 right-3 mt-1 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
-            <div className="p-1.5">
-              <button
-                onClick={() => {
-                  setIsVaultDropdownOpen(false);
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left hover:bg-surfaceHighlight/50 transition-colors group"
-              >
-                <FolderOpen size={16} className="text-brand shrink-0" />
-                <span className="text-[13px] text-textMain truncate flex-1">{vaultName}</span>
-                <Check size={14} className="text-brand shrink-0" />
-              </button>
+            <div className="p-1.5 max-h-[200px] overflow-y-auto">
+              {knownVaults.map((vault) => {
+                const isActive = vault.path === vaultPath;
+                return (
+                  <button
+                    key={vault.path}
+                    onClick={() => {
+                      setIsVaultDropdownOpen(false);
+                      if (!isActive) {
+                        onSwitchVault(vault.path);
+                      }
+                    }}
+                    className={clsx(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-colors group",
+                      isActive ? "bg-brand/10" : "hover:bg-surfaceHighlight/50"
+                    )}
+                  >
+                    <FolderOpen size={16} className={isActive ? "text-brand shrink-0" : "text-textMuted shrink-0"} />
+                    <span className="text-[13px] text-textMain truncate flex-1">{vault.name}</span>
+                    {isActive && <Check size={14} className="text-brand shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
             <div className="border-t border-border/50">
               <button
                 onClick={() => {
                   setIsVaultDropdownOpen(false);
-                  onChangeVault();
+                  onOpenSettings('storage');
                 }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surfaceHighlight/30 transition-colors"
               >
-                <Plus size={16} className="text-textMuted shrink-0" />
-                <span className="text-[13px] text-textMuted">Switch or create vault...</span>
+                <Settings size={16} className="text-textMuted shrink-0" />
+                <span className="text-[13px] text-textMuted">Manage vaults...</span>
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, Square, X, Copy, Search } from 'lucide-react'
+import { useTheme } from '@/contexts/ThemeContext'
 
 interface TitleBarProps {
   onOpenCommandPalette?: () => void
@@ -8,6 +9,7 @@ interface TitleBarProps {
 
 export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false)
+  const { settings } = useTheme()
   const appWindow = getCurrentWindow()
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
         className="w-36 h-full flex items-center px-4 cursor-default shrink-0"
       >
         <span className="text-xs font-medium text-textMuted tracking-wide">
-          lazuli
+          {settings.appName.toLowerCase()}
         </span>
       </div>
 

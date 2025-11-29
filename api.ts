@@ -32,6 +32,19 @@ async function getDb(): Promise<Database> {
         PRIMARY KEY (tag, filename, notebook_path)
       )
     `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS known_vaults (
+        path TEXT PRIMARY KEY,
+        name TEXT,
+        added_at INTEGER
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS vault_settings (
+        vault_path TEXT PRIMARY KEY,
+        accent_color TEXT
+      )
+    `);
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag)`);
   }
   return db;
@@ -67,6 +80,67 @@ export async function getVaultPath(): Promise<string | null> {
 
 export async function setVaultPath(path: string): Promise<void> {
   await saveSetting('vaultPath', path);
+  await addKnownVault(path);
+}
+
+export interface KnownVault {
+  path: string;
+  name: string;
+  addedAt: number;
+}
+
+export async function getKnownVaults(): Promise<KnownVault[]> {
+  const database = await getDb();
+  const result = await database.select<{ path: string; name: string; added_at: number }[]>(
+    'SELECT path, name, added_at FROM known_vaults ORDER BY added_at DESC'
+  );
+  return result.map(r => ({
+    path: r.path,
+    name: r.name,
+    addedAt: r.added_at,
+  }));
+}
+
+export async function addKnownVault(path: string): Promise<void> {
+  const database = await getDb();
+  const name = path.split(/[/\\]/).pop() || 'Unknown';
+  await database.execute(
+    'INSERT OR IGNORE INTO known_vaults (path, name, added_at) VALUES (?, ?, ?)',
+    [path, name, Date.now()]
+  );
+}
+
+export async function removeKnownVault(path: string): Promise<void> {
+  const database = await getDb();
+  await database.execute('DELETE FROM known_vaults WHERE path = ?', [path]);
+}
+
+export async function getVaultAccentColor(vaultPath: string): Promise<string | null> {
+  const database = await getDb();
+  const result = await database.select<{ accent_color: string }[]>(
+    'SELECT accent_color FROM vault_settings WHERE vault_path = ?',
+    [vaultPath]
+  );
+  return result.length > 0 ? result[0].accent_color : null;
+}
+
+export async function saveVaultAccentColor(vaultPath: string, accentColor: string): Promise<void> {
+  const database = await getDb();
+  await database.execute(
+    'INSERT OR REPLACE INTO vault_settings (vault_path, accent_color) VALUES (?, ?)',
+    [vaultPath, accentColor]
+  );
+}
+
+export async function applyAccentColorToAllVaults(accentColor: string): Promise<void> {
+  const database = await getDb();
+  const vaults = await getKnownVaults();
+  for (const vault of vaults) {
+    await database.execute(
+      'INSERT OR REPLACE INTO vault_settings (vault_path, accent_color) VALUES (?, ?)',
+      [vault.path, accentColor]
+    );
+  }
 }
 
 interface RawNotebook {
