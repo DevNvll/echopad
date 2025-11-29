@@ -6,10 +6,9 @@ interface InputAreaProps {
   channelName: string;
   onSendMessage: (content: string) => void;
   vaultPath: string | null;
-  notebookName: string | null;
 }
 
-export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage, vaultPath, notebookName }) => {
+export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage, vaultPath }) => {
   const [content, setContent] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -53,7 +52,7 @@ export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage
   };
 
   const processImageFile = async (file: File) => {
-    if (!vaultPath || !notebookName) return;
+    if (!vaultPath) return;
     if (!file.type.startsWith('image/')) return;
 
     setIsUploading(true);
@@ -66,7 +65,7 @@ export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage
       const extension = file.name.split('.').pop()?.toLowerCase() || 
         file.type.split('/')[1] || 'png';
       
-      const relativePath = await saveImage(vaultPath, notebookName, base64, extension);
+      const relativePath = await saveImage(vaultPath, base64, extension);
       insertImageMarkdown(relativePath);
     } catch (err) {
       console.error('Failed to save image:', err);
@@ -127,7 +126,7 @@ export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || !vaultPath || !notebookName}
+              disabled={isUploading || !vaultPath}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-textMuted hover:text-textMain hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
               title="Add image"
             >

@@ -3,10 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Notebook {
     pub name: String,
     pub path: String,
+    pub relative_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<Notebook>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,15 +25,9 @@ pub struct NoteMetadata {
     pub created_at: u64,
 }
 
-#[tauri::command]
-fn list_notebooks(vault_path: String) -> Result<Vec<Notebook>, String> {
-    let path = PathBuf::from(&vault_path);
-    if !path.exists() {
-        return Err("Vault path does not exist".to_string());
-    }
-
+fn scan_notebooks_recursive(dir_path: &PathBuf, vault_path: &PathBuf) -> Result<Vec<Notebook>, String> {
     let mut notebooks = Vec::new();
-    let entries = fs::read_dir(&path).map_err(|e| e.to_string())?;
+    let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
 
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -38,10 +35,22 @@ fn list_notebooks(vault_path: String) -> Result<Vec<Notebook>, String> {
         if entry_path.is_dir() {
             if let Some(name) = entry_path.file_name() {
                 let name_str = name.to_string_lossy().to_string();
-                if !name_str.starts_with('.') {
+                if !name_str.starts_with('.') && name_str != "attachments" {
+                    let relative_path = entry_path
+                        .strip_prefix(vault_path)
+                        .map_err(|e| e.to_string())?
+                        .to_string_lossy()
+                        .to_string()
+                        .replace('\\', "/");
+                    
+                    let children = scan_notebooks_recursive(&entry_path, vault_path)?;
+                    let children_opt = if children.is_empty() { None } else { Some(children) };
+                    
                     notebooks.push(Notebook {
                         name: name_str,
                         path: entry_path.to_string_lossy().to_string(),
+                        relative_path,
+                        children: children_opt,
                     });
                 }
             }
@@ -53,24 +62,51 @@ fn list_notebooks(vault_path: String) -> Result<Vec<Notebook>, String> {
 }
 
 #[tauri::command]
-fn create_notebook(vault_path: String, name: String) -> Result<Notebook, String> {
-    let path = PathBuf::from(&vault_path).join(&name);
+fn list_notebooks(vault_path: String) -> Result<Vec<Notebook>, String> {
+    let path = PathBuf::from(&vault_path);
+    if !path.exists() {
+        return Err("Vault path does not exist".to_string());
+    }
+
+    scan_notebooks_recursive(&path, &path)
+}
+
+#[tauri::command]
+fn create_notebook(vault_path: String, name: String, parent_path: Option<String>) -> Result<Notebook, String> {
+    let vault = PathBuf::from(&vault_path);
+    let path = match &parent_path {
+        Some(parent) => vault.join(parent).join(&name),
+        None => vault.join(&name),
+    };
+    
     if path.exists() {
         return Err("Notebook already exists".to_string());
     }
 
     fs::create_dir_all(&path).map_err(|e| e.to_string())?;
 
+    let relative_path = path
+        .strip_prefix(&vault)
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string()
+        .replace('\\', "/");
+
     Ok(Notebook {
         name,
         path: path.to_string_lossy().to_string(),
+        relative_path,
+        children: None,
     })
 }
 
 #[tauri::command]
-fn rename_notebook(vault_path: String, old_name: String, new_name: String) -> Result<Notebook, String> {
-    let old_path = PathBuf::from(&vault_path).join(&old_name);
-    let new_path = PathBuf::from(&vault_path).join(&new_name);
+fn rename_notebook(vault_path: String, old_relative_path: String, new_name: String) -> Result<Notebook, String> {
+    let vault = PathBuf::from(&vault_path);
+    let old_path = vault.join(&old_relative_path);
+    
+    let parent_dir = old_path.parent().unwrap_or(&vault);
+    let new_path = parent_dir.join(&new_name);
 
     if !old_path.exists() {
         return Err("Notebook does not exist".to_string());
@@ -81,15 +117,24 @@ fn rename_notebook(vault_path: String, old_name: String, new_name: String) -> Re
 
     fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
 
+    let relative_path = new_path
+        .strip_prefix(&vault)
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string()
+        .replace('\\', "/");
+
     Ok(Notebook {
         name: new_name,
         path: new_path.to_string_lossy().to_string(),
+        relative_path,
+        children: None,
     })
 }
 
 #[tauri::command]
-fn delete_notebook(vault_path: String, name: String) -> Result<(), String> {
-    let path = PathBuf::from(&vault_path).join(&name);
+fn delete_notebook(vault_path: String, relative_path: String) -> Result<(), String> {
+    let path = PathBuf::from(&vault_path).join(&relative_path);
     if !path.exists() {
         return Err("Notebook does not exist".to_string());
     }
@@ -99,8 +144,8 @@ fn delete_notebook(vault_path: String, name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_notes(vault_path: String, notebook_name: String) -> Result<Vec<NoteMetadata>, String> {
-    let path = PathBuf::from(&vault_path).join(&notebook_name);
+fn list_notes(vault_path: String, notebook_path: String) -> Result<Vec<NoteMetadata>, String> {
+    let path = PathBuf::from(&vault_path).join(&notebook_path);
     if !path.exists() {
         return Err("Notebook does not exist".to_string());
     }
@@ -135,8 +180,8 @@ fn list_notes(vault_path: String, notebook_name: String) -> Result<Vec<NoteMetad
 }
 
 #[tauri::command]
-fn read_note(vault_path: String, notebook_name: String, filename: String) -> Result<NoteFile, String> {
-    let path = PathBuf::from(&vault_path).join(&notebook_name).join(&filename);
+fn read_note(vault_path: String, notebook_path: String, filename: String) -> Result<NoteFile, String> {
+    let path = PathBuf::from(&vault_path).join(&notebook_path).join(&filename);
     if !path.exists() {
         return Err("Note does not exist".to_string());
     }
@@ -155,9 +200,9 @@ fn read_note(vault_path: String, notebook_name: String, filename: String) -> Res
 }
 
 #[tauri::command]
-fn create_note(vault_path: String, notebook_name: String, content: String) -> Result<NoteFile, String> {
-    let notebook_path = PathBuf::from(&vault_path).join(&notebook_name);
-    if !notebook_path.exists() {
+fn create_note(vault_path: String, notebook_path: String, content: String) -> Result<NoteFile, String> {
+    let full_notebook_path = PathBuf::from(&vault_path).join(&notebook_path);
+    if !full_notebook_path.exists() {
         return Err("Notebook does not exist".to_string());
     }
 
@@ -167,7 +212,7 @@ fn create_note(vault_path: String, notebook_name: String, content: String) -> Re
         .as_millis() as u64;
 
     let filename = format!("{}.md", timestamp);
-    let path = notebook_path.join(&filename);
+    let path = full_notebook_path.join(&filename);
 
     fs::write(&path, &content).map_err(|e| e.to_string())?;
 
@@ -179,8 +224,8 @@ fn create_note(vault_path: String, notebook_name: String, content: String) -> Re
 }
 
 #[tauri::command]
-fn update_note(vault_path: String, notebook_name: String, filename: String, content: String) -> Result<NoteFile, String> {
-    let path = PathBuf::from(&vault_path).join(&notebook_name).join(&filename);
+fn update_note(vault_path: String, notebook_path: String, filename: String, content: String) -> Result<NoteFile, String> {
+    let path = PathBuf::from(&vault_path).join(&notebook_path).join(&filename);
     if !path.exists() {
         return Err("Note does not exist".to_string());
     }
@@ -200,8 +245,8 @@ fn update_note(vault_path: String, notebook_name: String, filename: String, cont
 }
 
 #[tauri::command]
-fn delete_note(vault_path: String, notebook_name: String, filename: String) -> Result<(), String> {
-    let path = PathBuf::from(&vault_path).join(&notebook_name).join(&filename);
+fn delete_note(vault_path: String, notebook_path: String, filename: String) -> Result<(), String> {
+    let path = PathBuf::from(&vault_path).join(&notebook_path).join(&filename);
     if !path.exists() {
         return Err("Note does not exist".to_string());
     }
@@ -211,15 +256,15 @@ fn delete_note(vault_path: String, notebook_name: String, filename: String) -> R
 }
 
 #[tauri::command]
-fn save_image(vault_path: String, notebook_name: String, image_data: String, extension: String) -> Result<String, String> {
-    let notebook_path = PathBuf::from(&vault_path).join(&notebook_name);
-    if !notebook_path.exists() {
-        return Err("Notebook does not exist".to_string());
+fn save_image(vault_path: String, image_data: String, extension: String) -> Result<String, String> {
+    let vault = PathBuf::from(&vault_path);
+    if !vault.exists() {
+        return Err("Vault does not exist".to_string());
     }
 
-    let images_path = notebook_path.join("images");
-    if !images_path.exists() {
-        fs::create_dir_all(&images_path).map_err(|e| e.to_string())?;
+    let attachments_path = vault.join("attachments");
+    if !attachments_path.exists() {
+        fs::create_dir_all(&attachments_path).map_err(|e| e.to_string())?;
     }
 
     let timestamp = std::time::SystemTime::now()
@@ -228,12 +273,12 @@ fn save_image(vault_path: String, notebook_name: String, image_data: String, ext
         .as_millis() as u64;
 
     let filename = format!("{}.{}", timestamp, extension);
-    let file_path = images_path.join(&filename);
+    let file_path = attachments_path.join(&filename);
 
     let image_bytes = BASE64.decode(&image_data).map_err(|e| e.to_string())?;
     fs::write(&file_path, image_bytes).map_err(|e| e.to_string())?;
 
-    Ok(format!("images/{}", filename))
+    Ok(format!("attachments/{}", filename))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

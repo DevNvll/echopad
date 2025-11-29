@@ -16,7 +16,9 @@ export interface NoteMetadata {
 export interface Notebook {
   name: string;
   path: string;
+  relativePath: string;
   isPinned?: boolean;
+  children?: Notebook[];
 }
 
 export interface SearchFilters {

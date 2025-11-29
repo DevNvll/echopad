@@ -19,7 +19,6 @@ interface MessageListProps {
   onEditSubmit?: (filename: string, newContent: string) => void
   onEditCancel?: () => void
   vaultPath?: string | null
-  activeNotebook?: string | null
 }
 
 export const MessageList: React.FC<MessageListProps> = React.memo(
@@ -34,8 +33,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     editingMessageId,
     onEditSubmit,
     onEditCancel,
-    vaultPath,
-    activeNotebook
+    vaultPath
   }) {
     const [editContent, setEditContent] = useState('')
     const editAreaRef = useRef<HTMLTextAreaElement>(null)
@@ -339,12 +337,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
                             <p {...props} className="mb-1 last:mb-0" />
                           ),
                           img: ({ node, src, alt, ...props }) => {
-                            const notebookForImage =
-                              note.notebookName || activeNotebook
                             if (
                               src &&
                               vaultPath &&
-                              notebookForImage &&
                               !src.startsWith('http://') &&
                               !src.startsWith('https://') &&
                               !src.startsWith('data:')
@@ -354,7 +349,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
                                   src={src}
                                   alt={alt}
                                   vaultPath={vaultPath}
-                                  notebookName={notebookForImage}
                                 />
                               )
                             }

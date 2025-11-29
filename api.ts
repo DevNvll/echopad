@@ -55,69 +55,94 @@ export async function setVaultPath(path: string): Promise<void> {
   await saveSetting('vaultPath', path);
 }
 
+interface RawNotebook {
+  name: string;
+  path: string;
+  relative_path: string;
+  children?: RawNotebook[];
+}
+
+function mapNotebook(raw: RawNotebook, pinnedSet: Set<string>): Notebook {
+  return {
+    name: raw.name,
+    path: raw.path,
+    relativePath: raw.relative_path,
+    isPinned: pinnedSet.has(raw.relative_path),
+    children: raw.children?.map(c => mapNotebook(c, pinnedSet)),
+  };
+}
+
 export async function listNotebooks(vaultPath: string): Promise<Notebook[]> {
-  const notebooks = await invoke<{ name: string; path: string }[]>('list_notebooks', { vaultPath });
+  const notebooks = await invoke<RawNotebook[]>('list_notebooks', { vaultPath });
   const database = await getDb();
   const pinnedResult = await database.select<{ name: string }[]>('SELECT name FROM pinned_notebooks');
   const pinnedSet = new Set(pinnedResult.map(r => r.name));
   
-  return notebooks.map(n => ({
-    ...n,
-    isPinned: pinnedSet.has(n.name)
-  }));
+  return notebooks.map(n => mapNotebook(n, pinnedSet));
 }
 
-export async function createNotebook(vaultPath: string, name: string): Promise<Notebook> {
-  return invoke<Notebook>('create_notebook', { vaultPath, name });
+export async function createNotebook(vaultPath: string, name: string, parentPath?: string): Promise<Notebook> {
+  const raw = await invoke<RawNotebook>('create_notebook', { vaultPath, name, parentPath: parentPath || null });
+  return {
+    name: raw.name,
+    path: raw.path,
+    relativePath: raw.relative_path,
+    children: undefined,
+  };
 }
 
-export async function renameNotebook(vaultPath: string, oldName: string, newName: string): Promise<Notebook> {
+export async function renameNotebook(vaultPath: string, oldRelativePath: string, newName: string): Promise<Notebook> {
   const database = await getDb();
   const wasPinned = await database.select<{ name: string }[]>(
     'SELECT name FROM pinned_notebooks WHERE name = ?',
-    [oldName]
+    [oldRelativePath]
   );
   
-  const result = await invoke<Notebook>('rename_notebook', { vaultPath, oldName, newName });
+  const raw = await invoke<RawNotebook>('rename_notebook', { vaultPath, oldRelativePath, newName });
   
   if (wasPinned.length > 0) {
-    await database.execute('DELETE FROM pinned_notebooks WHERE name = ?', [oldName]);
-    await database.execute('INSERT INTO pinned_notebooks (name) VALUES (?)', [newName]);
+    await database.execute('DELETE FROM pinned_notebooks WHERE name = ?', [oldRelativePath]);
+    await database.execute('INSERT INTO pinned_notebooks (name) VALUES (?)', [raw.relative_path]);
   }
   
-  return result;
+  return {
+    name: raw.name,
+    path: raw.path,
+    relativePath: raw.relative_path,
+    children: undefined,
+  };
 }
 
-export async function deleteNotebook(vaultPath: string, name: string): Promise<void> {
-  await invoke('delete_notebook', { vaultPath, name });
+export async function deleteNotebook(vaultPath: string, relativePath: string): Promise<void> {
+  await invoke('delete_notebook', { vaultPath, relativePath });
   const database = await getDb();
-  await database.execute('DELETE FROM pinned_notebooks WHERE name = ?', [name]);
+  await database.execute('DELETE FROM pinned_notebooks WHERE name = ?', [relativePath]);
 }
 
-export async function toggleNotebookPin(name: string): Promise<boolean> {
+export async function toggleNotebookPin(relativePath: string): Promise<boolean> {
   const database = await getDb();
   const existing = await database.select<{ name: string }[]>(
     'SELECT name FROM pinned_notebooks WHERE name = ?',
-    [name]
+    [relativePath]
   );
   
   if (existing.length > 0) {
-    await database.execute('DELETE FROM pinned_notebooks WHERE name = ?', [name]);
+    await database.execute('DELETE FROM pinned_notebooks WHERE name = ?', [relativePath]);
     return false;
   } else {
-    await database.execute('INSERT INTO pinned_notebooks (name) VALUES (?)', [name]);
+    await database.execute('INSERT INTO pinned_notebooks (name) VALUES (?)', [relativePath]);
     return true;
   }
 }
 
-export async function listNotes(vaultPath: string, notebookName: string): Promise<NoteMetadata[]> {
-  return invoke<NoteMetadata[]>('list_notes', { vaultPath, notebookName });
+export async function listNotes(vaultPath: string, notebookPath: string): Promise<NoteMetadata[]> {
+  return invoke<NoteMetadata[]>('list_notes', { vaultPath, notebookPath });
 }
 
-export async function readNote(vaultPath: string, notebookName: string, filename: string): Promise<Note> {
+export async function readNote(vaultPath: string, notebookPath: string, filename: string): Promise<Note> {
   const result = await invoke<{ filename: string; content: string; created_at: number }>('read_note', {
     vaultPath,
-    notebookName,
+    notebookPath,
     filename
   });
   
@@ -131,14 +156,14 @@ export async function readNote(vaultPath: string, notebookName: string, filename
     tags,
     hasLink: urls.length > 0,
     urls,
-    notebookName
+    notebookName: notebookPath
   };
 }
 
-export async function createNote(vaultPath: string, notebookName: string, content: string): Promise<Note> {
+export async function createNote(vaultPath: string, notebookPath: string, content: string): Promise<Note> {
   const result = await invoke<{ filename: string; content: string; created_at: number }>('create_note', {
     vaultPath,
-    notebookName,
+    notebookPath,
     content
   });
   
@@ -152,14 +177,14 @@ export async function createNote(vaultPath: string, notebookName: string, conten
     tags,
     hasLink: urls.length > 0,
     urls,
-    notebookName
+    notebookName: notebookPath
   };
 }
 
-export async function updateNote(vaultPath: string, notebookName: string, filename: string, content: string): Promise<Note> {
+export async function updateNote(vaultPath: string, notebookPath: string, filename: string, content: string): Promise<Note> {
   const result = await invoke<{ filename: string; content: string; created_at: number }>('update_note', {
     vaultPath,
-    notebookName,
+    notebookPath,
     filename,
     content
   });
@@ -174,23 +199,35 @@ export async function updateNote(vaultPath: string, notebookName: string, filena
     tags,
     hasLink: urls.length > 0,
     urls,
-    notebookName
+    notebookName: notebookPath
   };
 }
 
-export async function deleteNote(vaultPath: string, notebookName: string, filename: string): Promise<void> {
-  await invoke('delete_note', { vaultPath, notebookName, filename });
+export async function deleteNote(vaultPath: string, notebookPath: string, filename: string): Promise<void> {
+  await invoke('delete_note', { vaultPath, notebookPath, filename });
+}
+
+function flattenNotebooks(notebooks: Notebook[]): Notebook[] {
+  const result: Notebook[] = [];
+  for (const nb of notebooks) {
+    result.push(nb);
+    if (nb.children) {
+      result.push(...flattenNotebooks(nb.children));
+    }
+  }
+  return result;
 }
 
 export async function searchNotes(vaultPath: string, query: string): Promise<Note[]> {
   const notebooks = await listNotebooks(vaultPath);
+  const flatNotebooks = flattenNotebooks(notebooks);
   const allNotes: Note[] = [];
   const lowerQuery = query.toLowerCase();
   
-  for (const notebook of notebooks) {
-    const noteMetadata = await listNotes(vaultPath, notebook.name);
+  for (const notebook of flatNotebooks) {
+    const noteMetadata = await listNotes(vaultPath, notebook.relativePath);
     for (const meta of noteMetadata) {
-      const note = await readNote(vaultPath, notebook.name, meta.filename);
+      const note = await readNote(vaultPath, notebook.relativePath, meta.filename);
       if (note.content.toLowerCase().includes(lowerQuery) || 
           note.tags.some(tag => tag.toLowerCase().includes(lowerQuery))) {
         allNotes.push(note);
@@ -201,10 +238,9 @@ export async function searchNotes(vaultPath: string, query: string): Promise<Not
   return allNotes.sort((a, b) => b.createdAt - a.createdAt);
 }
 
-export async function saveImage(vaultPath: string, notebookName: string, imageData: string, extension: string): Promise<string> {
+export async function saveImage(vaultPath: string, imageData: string, extension: string): Promise<string> {
   return invoke<string>('save_image', {
     vaultPath,
-    notebookName,
     imageData,
     extension
   });

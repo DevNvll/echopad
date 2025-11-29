@@ -11,10 +11,21 @@ interface CommandPaletteProps {
   setIsOpen: (open: boolean) => void;
   notebooks: Notebook[];
   vaultPath: string | null;
-  onSelectNotebook: (name: string) => void;
+  onSelectNotebook: (relativePath: string) => void;
   onSelectMessage: (note: Note) => void;
   onCreateNotebook: () => void;
 }
+
+const flattenNotebooks = (notebooks: Notebook[]): Notebook[] => {
+  const result: Notebook[] = [];
+  for (const nb of notebooks) {
+    result.push(nb);
+    if (nb.children) {
+      result.push(...flattenNotebooks(nb.children));
+    }
+  }
+  return result;
+};
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
@@ -102,17 +113,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         </Command.Group>
 
         <Command.Group heading="Notebooks" className="text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2 px-2">
-          {notebooks.map((notebook) => (
+          {flattenNotebooks(notebooks).map((notebook) => (
             <CommandItem
-              key={notebook.name}
-              value={`notebook-${notebook.name}`}
+              key={notebook.relativePath}
+              value={`notebook-${notebook.relativePath}`}
               onSelect={() => {
-                onSelectNotebook(notebook.name);
+                onSelectNotebook(notebook.relativePath);
                 setIsOpen(false);
               }}
             >
               <Hash className="mr-2 h-4 w-4 text-textMuted" />
-              <span>{notebook.name}</span>
+              <span>{notebook.relativePath}</span>
               <CommandShortcut>Jump to</CommandShortcut>
             </CommandItem>
           ))}

@@ -25,7 +25,7 @@ import { MessageList } from './components/MessageList';
 import { Modal } from './components/Modal';
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu';
 import { CommandPalette } from './components/CommandPalette';
-import { Hash, Trash2, Edit2, Copy, FolderOpen } from 'lucide-react';
+import { Hash, Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TitleBar } from './components/TitleBar';
 
@@ -44,9 +44,10 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'delete'>('create');
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'delete' | 'create-sub'>('create');
   const [notebookFormName, setNotebookFormName] = useState('');
   const [targetNotebook, setTargetNotebook] = useState<Notebook | null>(null);
+  const [parentNotebook, setParentNotebook] = useState<Notebook | null>(null);
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
@@ -86,9 +87,22 @@ function App() {
     loadNotebooks();
   }, [vaultPath]);
 
+  const flattenNotebooks = useCallback((nbs: Notebook[]): Notebook[] => {
+    const result: Notebook[] = [];
+    for (const nb of nbs) {
+      result.push(nb);
+      if (nb.children) {
+        result.push(...flattenNotebooks(nb.children));
+      }
+    }
+    return result;
+  }, []);
+
+  const allNotebooks = useMemo(() => flattenNotebooks(notebooks), [notebooks, flattenNotebooks]);
+
   useEffect(() => {
     if (isInitialized && notebooks.length > 0 && !activeNotebook) {
-      const defaultNb = notebooks[0].name;
+      const defaultNb = notebooks[0].relativePath;
       setActiveNotebook(defaultNb);
       saveSetting('lastActiveNotebook', defaultNb);
     }
@@ -121,11 +135,11 @@ function App() {
   }, [vaultPath, activeNotebook]);
 
   const notebookMap = useMemo(() => {
-    return notebooks.reduce((acc, nb) => {
-      acc[nb.name] = nb.name;
+    return allNotebooks.reduce((acc, nb) => {
+      acc[nb.relativePath] = nb.name;
       return acc;
     }, {} as Record<string, string>);
-  }, [notebooks]);
+  }, [allNotebooks]);
 
   const handleSelectVault = async () => {
     const selected = await open({
@@ -141,10 +155,10 @@ function App() {
     }
   };
 
-  const handleSelectNotebook = (name: string) => {
-    setActiveNotebook(name);
+  const handleSelectNotebook = (relativePath: string) => {
+    setActiveNotebook(relativePath);
     setTargetMessageId(null);
-    saveSetting('lastActiveNotebook', name);
+    saveSetting('lastActiveNotebook', relativePath);
   };
 
   const startResizing = useCallback(() => {
@@ -215,22 +229,36 @@ function App() {
     if (!vaultPath || !notebookFormName.trim()) return;
     
     const name = notebookFormName.trim().toLowerCase().replace(/\s+/g, '-');
-    const nb = await createNotebook(vaultPath, name);
-    setNotebooks(prev => [...prev, nb].sort((a, b) => a.name.localeCompare(b.name)));
+    const parentPath = parentNotebook?.relativePath;
+    const nb = await createNotebook(vaultPath, name, parentPath);
+    
+    const reloadNotebooks = async () => {
+      const nbs = await listNotebooks(vaultPath);
+      setNotebooks(nbs);
+    };
+    await reloadNotebooks();
+    
     setNotebookFormName('');
     setIsNotebookModalOpen(false);
-    handleSelectNotebook(nb.name);
+    setParentNotebook(null);
+    handleSelectNotebook(nb.relativePath);
   };
 
   const handleUpdateNotebook = async () => {
     if (!vaultPath || !targetNotebook || !notebookFormName.trim()) return;
     
     const newName = notebookFormName.trim().toLowerCase().replace(/\s+/g, '-');
-    const updated = await renameNotebook(vaultPath, targetNotebook.name, newName);
-    setNotebooks(prev => prev.map(nb => nb.name === targetNotebook.name ? updated : nb));
-    if (activeNotebook === targetNotebook.name) {
-      setActiveNotebook(updated.name);
-      saveSetting('lastActiveNotebook', updated.name);
+    const updated = await renameNotebook(vaultPath, targetNotebook.relativePath, newName);
+    
+    const reloadNotebooks = async () => {
+      const nbs = await listNotebooks(vaultPath);
+      setNotebooks(nbs);
+    };
+    await reloadNotebooks();
+    
+    if (activeNotebook === targetNotebook.relativePath) {
+      setActiveNotebook(updated.relativePath);
+      saveSetting('lastActiveNotebook', updated.relativePath);
     }
     setIsNotebookModalOpen(false);
     setTargetNotebook(null);
@@ -239,25 +267,44 @@ function App() {
   const handleDeleteNotebook = async () => {
     if (!vaultPath || !targetNotebook) return;
     
-    await deleteNotebook(vaultPath, targetNotebook.name);
-    setNotebooks(prev => prev.filter(nb => nb.name !== targetNotebook.name));
+    await deleteNotebook(vaultPath, targetNotebook.relativePath);
+    
+    const reloadNotebooks = async () => {
+      const nbs = await listNotebooks(vaultPath);
+      setNotebooks(nbs);
+    };
+    await reloadNotebooks();
     
     setIsNotebookModalOpen(false);
     setTargetNotebook(null);
     
-    if (activeNotebook === targetNotebook.name) {
-      const remaining = notebooks.find(nb => nb.name !== targetNotebook.name);
-      const newActive = remaining?.name || null;
+    if (activeNotebook === targetNotebook.relativePath) {
+      const remaining = allNotebooks.find(nb => nb.relativePath !== targetNotebook.relativePath);
+      const newActive = remaining?.relativePath || null;
       setActiveNotebook(newActive);
       if (newActive) saveSetting('lastActiveNotebook', newActive);
     }
   };
 
+  const updateNotebookInTree = useCallback((
+    nbs: Notebook[],
+    targetPath: string,
+    updater: (nb: Notebook) => Notebook
+  ): Notebook[] => {
+    return nbs.map(nb => {
+      if (nb.relativePath === targetPath) {
+        return updater(nb);
+      }
+      if (nb.children) {
+        return { ...nb, children: updateNotebookInTree(nb.children, targetPath, updater) };
+      }
+      return nb;
+    });
+  }, []);
+
   const handleTogglePin = async (notebook: Notebook) => {
-    const isPinned = await toggleNotebookPin(notebook.name);
-    setNotebooks(prev => prev.map(nb => 
-      nb.name === notebook.name ? { ...nb, isPinned } : nb
-    ));
+    const isPinned = await toggleNotebookPin(notebook.relativePath);
+    setNotebooks(prev => updateNotebookInTree(prev, notebook.relativePath, nb => ({ ...nb, isPinned })));
   };
 
   const onNotebookContextMenu = (e: React.MouseEvent, notebook: Notebook) => {
@@ -296,6 +343,11 @@ function App() {
         setModalMode('delete');
         setTargetNotebook(notebook);
         setIsNotebookModalOpen(true);
+      } else if (action === 'create-sub') {
+        setModalMode('create-sub');
+        setParentNotebook(notebook);
+        setNotebookFormName('');
+        setIsNotebookModalOpen(true);
       }
     } else if (contextMenu.type === 'message') {
       const note = contextMenu.data as Note;
@@ -331,7 +383,7 @@ function App() {
     return () => document.removeEventListener('keydown', down);
   }, [isCommandOpen]);
 
-  const currentNotebook = notebooks.find(nb => nb.name === activeNotebook);
+  const currentNotebook = allNotebooks.find(nb => nb.relativePath === activeNotebook);
 
   if (isVaultSetupOpen || !vaultPath) {
     return (
@@ -382,6 +434,12 @@ function App() {
           setNotebookFormName('');
           setIsNotebookModalOpen(true);
         }}
+        onCreateSubnotebook={(parent) => {
+          setModalMode('create-sub');
+          setParentNotebook(parent);
+          setNotebookFormName('');
+          setIsNotebookModalOpen(true);
+        }}
         onContextMenu={onNotebookContextMenu}
         onTogglePin={handleTogglePin}
         width={sidebarWidth}
@@ -420,13 +478,11 @@ function App() {
               onEditSubmit={handleEditMessage}
               onEditCancel={handleEditCancel}
               vaultPath={vaultPath}
-              activeNotebook={activeNotebook}
             />
             <InputArea 
               channelName={currentNotebook?.name || 'unknown'} 
               onSendMessage={handleSendMessage}
               vaultPath={vaultPath}
-              notebookName={activeNotebook}
             />
           </div>
         </div>
@@ -453,6 +509,7 @@ function App() {
           onClose={() => setContextMenu(null)}
           onSelect={handleContextMenuAction}
           items={contextMenu.type === 'notebook' ? [
+            { label: 'Create Subnotebook', action: 'create-sub', icon: <FolderPlus size={12} /> },
             { label: 'Edit Notebook', action: 'edit', icon: <Edit2 size={12} /> },
             { label: 'Delete Notebook', action: 'delete', icon: <Trash2 size={12} />, destructive: true },
           ] : [
@@ -465,20 +522,24 @@ function App() {
 
       <Modal
         isOpen={isNotebookModalOpen}
-        onClose={() => setIsNotebookModalOpen(false)}
+        onClose={() => {
+          setIsNotebookModalOpen(false);
+          setParentNotebook(null);
+        }}
         title={
           modalMode === 'create' ? 'Create Notebook' : 
+          modalMode === 'create-sub' ? `Create Subnotebook in ${parentNotebook?.name}` :
           modalMode === 'edit' ? 'Edit Notebook' : 
           'Delete Notebook'
         }
         submitLabel={
-          modalMode === 'create' ? 'Create' : 
+          modalMode === 'create' || modalMode === 'create-sub' ? 'Create' : 
           modalMode === 'edit' ? 'Save Changes' : 
           'Delete'
         }
         isDestructive={modalMode === 'delete'}
         onSubmit={() => {
-          if (modalMode === 'create') handleCreateNotebook();
+          if (modalMode === 'create' || modalMode === 'create-sub') handleCreateNotebook();
           if (modalMode === 'edit') handleUpdateNotebook();
           if (modalMode === 'delete') handleDeleteNotebook();
         }}
@@ -486,13 +547,20 @@ function App() {
         {modalMode === 'delete' ? (
           <div className="text-textMuted text-sm">
             Are you sure you want to delete <span className="font-bold text-textMain">{targetNotebook?.name}</span>? 
-            This will delete all notes within this notebook. <br/><br/>
+            This will delete all notes and subnotebooks within this notebook. <br/><br/>
             <span className="text-red-400 font-bold uppercase text-xs">This action cannot be undone.</span>
           </div>
         ) : (
           <div className="space-y-4">
+            {modalMode === 'create-sub' && parentNotebook && (
+              <div className="text-textMuted text-sm mb-2">
+                Creating inside: <span className="text-textMain font-medium">{parentNotebook.relativePath}</span>
+              </div>
+            )}
             <div>
-              <label className="block text-xs font-bold text-textMuted uppercase mb-1.5">Notebook Name</label>
+              <label className="block text-xs font-bold text-textMuted uppercase mb-1.5">
+                {modalMode === 'create-sub' ? 'Subnotebook Name' : 'Notebook Name'}
+              </label>
               <input 
                 value={notebookFormName}
                 onChange={(e) => setNotebookFormName(e.target.value)}
