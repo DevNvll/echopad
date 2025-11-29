@@ -88,12 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       style={{ width: `${width}px` }}
       className="bg-sidebar flex flex-col h-full border-r border-border/40 shrink-0 relative"
     >
-      <div className="h-16 flex items-center px-6 font-bold text-textMain tracking-tight shadow-sm border-b border-border/20">
-        <div className="w-3 h-3 rounded-full bg-brand mr-3 shadow-[0_0_10px_rgba(129,140,248,0.4)]"></div>
-        <span className="text-[16px]">Lazuli</span>
-      </div>
-
-      <div className="p-3 border-b border-border/30" ref={dropdownRef}>
+      <div className="h-16 px-3 flex items-center border-b border-border/30 relative" ref={dropdownRef}>
         <button
           onClick={() => setIsVaultDropdownOpen(!isVaultDropdownOpen)}
           className="w-full flex items-center gap-3 p-2.5 rounded-lg bg-surfaceHighlight/40 hover:bg-surfaceHighlight/60 transition-colors group"
@@ -115,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
         
         {isVaultDropdownOpen && (
-          <div className="absolute left-3 right-3 mt-2 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="absolute top-full left-3 right-3 mt-1 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
             <div className="p-1.5">
               <button
                 onClick={() => {
