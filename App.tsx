@@ -17,7 +17,12 @@ import {
   updateNote,
   deleteNote,
   toggleNotebookPin,
-  searchNotes
+  searchNotes,
+  syncVaultTags,
+  syncNoteTags,
+  removeNoteTags,
+  getAllTags,
+  TagWithCount
 } from './api';
 import { Sidebar } from './components/Sidebar';
 import { InputArea } from './components/InputArea';
@@ -38,6 +43,8 @@ function App() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
+  const [allTags, setAllTags] = useState<TagWithCount[]>([]);
+  const [commandInitialSearch, setCommandInitialSearch] = useState('');
 
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isResizing, setIsResizing] = useState(false);
@@ -85,6 +92,17 @@ function App() {
       setNotebooks(nbs);
     };
     loadNotebooks();
+  }, [vaultPath]);
+
+  useEffect(() => {
+    if (!vaultPath) return;
+    
+    const loadTags = async () => {
+      await syncVaultTags(vaultPath);
+      const tags = await getAllTags();
+      setAllTags(tags);
+    };
+    loadTags();
   }, [vaultPath]);
 
   const flattenNotebooks = useCallback((nbs: Notebook[]): Notebook[] => {
@@ -208,6 +226,10 @@ function App() {
     
     const newNote = await createNote(vaultPath, activeNotebook, content);
     setNotes(prev => [...prev, newNote]);
+    
+    await syncNoteTags(newNote);
+    const tags = await getAllTags();
+    setAllTags(tags);
   };
 
   const handleEditMessage = useCallback(async (filename: string, newContent: string) => {
@@ -216,13 +238,21 @@ function App() {
     const updated = await updateNote(vaultPath, activeNotebook, filename, newContent);
     setNotes(prev => prev.map(n => n.filename === filename ? updated : n));
     setEditingMessageId(null);
+    
+    await syncNoteTags(updated);
+    const tags = await getAllTags();
+    setAllTags(tags);
   }, [vaultPath, activeNotebook]);
 
   const handleDeleteMessage = async (filename: string) => {
     if (!vaultPath || !activeNotebook) return;
     
+    await removeNoteTags(filename, activeNotebook);
     await deleteNote(vaultPath, activeNotebook, filename);
     setNotes(prev => prev.filter(n => n.filename !== filename));
+    
+    const tags = await getAllTags();
+    setAllTags(tags);
   };
 
   const handleCreateNotebook = async () => {
@@ -369,6 +399,11 @@ function App() {
     }
   };
 
+  const handleTagClick = useCallback((tag: string) => {
+    setCommandInitialSearch(`#${tag}`);
+    setIsCommandOpen(true);
+  }, []);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -478,6 +513,7 @@ function App() {
               onEditSubmit={handleEditMessage}
               onEditCancel={handleEditCancel}
               vaultPath={vaultPath}
+              onTagClick={handleTagClick}
             />
             <InputArea 
               channelName={currentNotebook?.name || 'unknown'} 
@@ -490,7 +526,10 @@ function App() {
 
       <CommandPalette 
         isOpen={isCommandOpen}
-        setIsOpen={setIsCommandOpen}
+        setIsOpen={(open) => {
+          setIsCommandOpen(open);
+          if (!open) setCommandInitialSearch('');
+        }}
         notebooks={notebooks}
         vaultPath={vaultPath}
         onSelectNotebook={handleSelectNotebook}
@@ -500,6 +539,8 @@ function App() {
           setNotebookFormName('');
           setIsNotebookModalOpen(true);
         }}
+        allTags={allTags}
+        initialSearch={commandInitialSearch}
       />
 
       {contextMenu && (

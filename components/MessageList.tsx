@@ -19,6 +19,7 @@ interface MessageListProps {
   onEditSubmit?: (filename: string, newContent: string) => void
   onEditCancel?: () => void
   vaultPath?: string | null
+  onTagClick?: (tag: string) => void
 }
 
 export const MessageList: React.FC<MessageListProps> = React.memo(
@@ -33,7 +34,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     editingMessageId,
     onEditSubmit,
     onEditCancel,
-    vaultPath
+    vaultPath,
+    onTagClick
   }) {
     const [editContent, setEditContent] = useState('')
     const editAreaRef = useRef<HTMLTextAreaElement>(null)
@@ -371,6 +373,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
                           {note.tags.map((tag) => (
                             <span
                               key={tag}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onTagClick?.(tag)
+                              }}
                               className="text-[11px] bg-brand/5 text-brand border border-brand/10 px-2 py-0.5 rounded hover:bg-brand/10 cursor-pointer transition-colors select-none font-medium"
                             >
                               #{tag}

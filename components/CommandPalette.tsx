@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Command } from 'cmdk';
-import { Hash, Plus, Search, FileText, CornerDownLeft, Calendar } from 'lucide-react';
+import { Hash, Plus, Search, FileText, CornerDownLeft, Calendar, Tag } from 'lucide-react';
 import { Notebook, Note } from '../types';
-import { searchNotes } from '../api';
+import { searchNotes, searchByTag, TagWithCount } from '../api';
 import { formatMessageDate } from '../utils/formatting';
 import { clsx } from 'clsx';
 
@@ -14,6 +14,8 @@ interface CommandPaletteProps {
   onSelectNotebook: (relativePath: string) => void;
   onSelectMessage: (note: Note) => void;
   onCreateNotebook: () => void;
+  allTags?: TagWithCount[];
+  initialSearch?: string;
 }
 
 const flattenNotebooks = (notebooks: Notebook[]): Notebook[] => {
@@ -35,9 +37,31 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onSelectNotebook,
   onSelectMessage,
   onCreateNotebook,
+  allTags = [],
+  initialSearch = '',
 }) => {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [results, setResults] = useState<Note[]>([]);
+
+  useEffect(() => {
+    if (isOpen && initialSearch) {
+      setSearch(initialSearch);
+    }
+  }, [isOpen, initialSearch]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+      setResults([]);
+    }
+  }, [isOpen]);
+
+  const isTagSearch = search.trim().startsWith('#');
+  const tagQuery = isTagSearch ? search.trim().slice(1).toLowerCase() : '';
+
+  const filteredTags = isTagSearch && tagQuery
+    ? allTags.filter(t => t.tag.toLowerCase().includes(tagQuery))
+    : allTags.slice(0, 10);
 
   useEffect(() => {
     const runSearch = async () => {
@@ -46,13 +70,22 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         return;
       }
       
+      if (isTagSearch && tagQuery) {
+        const exactMatch = allTags.find(t => t.tag.toLowerCase() === tagQuery);
+        if (exactMatch) {
+          const found = await searchByTag(vaultPath, tagQuery);
+          setResults(found.slice(0, 20));
+          return;
+        }
+      }
+      
       const found = await searchNotes(vaultPath, search);
       setResults(found.slice(0, 20));
     };
 
     const timer = setTimeout(runSearch, 150);
     return () => clearTimeout(timer);
-  }, [search, vaultPath]);
+  }, [search, vaultPath, isTagSearch, tagQuery, allTags]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.ctrlKey && e.key === 'j') {
@@ -128,6 +161,24 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </CommandItem>
           ))}
         </Command.Group>
+
+        {filteredTags.length > 0 && (
+          <Command.Group heading="Tags" className="text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2 px-2">
+            {filteredTags.map((tagItem) => (
+              <CommandItem
+                key={tagItem.tag}
+                value={`tag-${tagItem.tag}`}
+                onSelect={() => {
+                  setSearch(`#${tagItem.tag}`);
+                }}
+              >
+                <Tag className="mr-2 h-4 w-4 text-brand" />
+                <span>#{tagItem.tag}</span>
+                <CommandShortcut>{tagItem.count} notes</CommandShortcut>
+              </CommandItem>
+            ))}
+          </Command.Group>
+        )}
 
         {results.length > 0 && (
           <Command.Group heading="Search Results" className="text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2 px-2">

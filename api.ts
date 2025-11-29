@@ -19,6 +19,15 @@ async function getDb(): Promise<Database> {
         name TEXT PRIMARY KEY
       )
     `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS note_tags (
+        tag TEXT,
+        filename TEXT,
+        notebook_path TEXT,
+        PRIMARY KEY (tag, filename, notebook_path)
+      )
+    `);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag)`);
   }
   return db;
 }
@@ -244,5 +253,78 @@ export async function saveImage(vaultPath: string, imageData: string, extension:
     imageData,
     extension
   });
+}
+
+export interface TagWithCount {
+  tag: string;
+  count: number;
+}
+
+export async function syncVaultTags(vaultPath: string): Promise<void> {
+  const database = await getDb();
+  await database.execute('DELETE FROM note_tags');
+  
+  const notebooks = await listNotebooks(vaultPath);
+  const flatNotebooks = flattenNotebooks(notebooks);
+  
+  for (const notebook of flatNotebooks) {
+    const noteMetadata = await listNotes(vaultPath, notebook.relativePath);
+    for (const meta of noteMetadata) {
+      const note = await readNote(vaultPath, notebook.relativePath, meta.filename);
+      for (const tag of note.tags) {
+        await database.execute(
+          'INSERT OR IGNORE INTO note_tags (tag, filename, notebook_path) VALUES (?, ?, ?)',
+          [tag, note.filename, notebook.relativePath]
+        );
+      }
+    }
+  }
+}
+
+export async function syncNoteTags(note: Note): Promise<void> {
+  const database = await getDb();
+  await database.execute(
+    'DELETE FROM note_tags WHERE filename = ? AND notebook_path = ?',
+    [note.filename, note.notebookName]
+  );
+  
+  for (const tag of note.tags) {
+    await database.execute(
+      'INSERT OR IGNORE INTO note_tags (tag, filename, notebook_path) VALUES (?, ?, ?)',
+      [tag, note.filename, note.notebookName]
+    );
+  }
+}
+
+export async function removeNoteTags(filename: string, notebookPath: string): Promise<void> {
+  const database = await getDb();
+  await database.execute(
+    'DELETE FROM note_tags WHERE filename = ? AND notebook_path = ?',
+    [filename, notebookPath]
+  );
+}
+
+export async function getAllTags(): Promise<TagWithCount[]> {
+  const database = await getDb();
+  const result = await database.select<{ tag: string; count: number }[]>(
+    'SELECT tag, COUNT(*) as count FROM note_tags GROUP BY tag ORDER BY count DESC'
+  );
+  return result;
+}
+
+export async function searchByTag(vaultPath: string, tag: string): Promise<Note[]> {
+  const database = await getDb();
+  const result = await database.select<{ filename: string; notebook_path: string }[]>(
+    'SELECT DISTINCT filename, notebook_path FROM note_tags WHERE tag = ?',
+    [tag.toLowerCase()]
+  );
+  
+  const notes: Note[] = [];
+  for (const row of result) {
+    const note = await readNote(vaultPath, row.notebook_path, row.filename);
+    notes.push(note);
+  }
+  
+  return notes.sort((a, b) => b.createdAt - a.createdAt);
 }
 
