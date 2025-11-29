@@ -1,31 +1,7 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
-import { Notebook, Note, AppSettings } from './types'
-import {
-  getVaultPath,
-  setVaultPath,
-  getSetting,
-  saveSetting,
-  listNotebooks,
-  createNotebook,
-  renameNotebook,
-  deleteNotebook,
-  listNotes,
-  readNote,
-  createNote,
-  updateNote,
-  deleteNote,
-  toggleNotebookPin,
-  syncVaultTags,
-  syncNoteTags,
-  removeNoteTags,
-  getAllTags,
-  TagWithCount,
-  getAppSettings,
-  addKnownVault,
-  getVaultAccentColor,
-  openNotebookInExplorer
-} from './api'
+import { Note, Notebook } from './types'
+import { getSetting, openNotebookInExplorer } from './api'
 import { Sidebar } from './components/Sidebar'
 import { InputArea } from './components/InputArea'
 import { MessageList } from './components/MessageList'
@@ -36,7 +12,7 @@ import {
 } from './components/modals'
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
-import { SettingsModal, SettingsSection } from './components/SettingsModal'
+import { SettingsModal } from './components/SettingsModal'
 import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
@@ -45,41 +21,51 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import { VaultSetup } from './components/VaultSetup'
 import { NotebookHeader } from './components/NotebookHeader'
 import { useSidebarResize, useKeyboardShortcuts } from './hooks'
+import {
+  useVaultStore,
+  useNotebookStore,
+  useNotesStore,
+  useTagsStore,
+  useUIStore
+} from './stores'
 
 function App() {
-  const [vaultPath, setVaultPathState] = useState<string | null>(null)
-  const [isVaultSetupOpen, setIsVaultSetupOpen] = useState(false)
-  const [notebooks, setNotebooks] = useState<Notebook[]>([])
-  const [activeNotebook, setActiveNotebook] = useState<string | null>(null)
-  const [notes, setNotes] = useState<Note[]>([])
-  const [isLoadingNotes, setIsLoadingNotes] = useState(false)
-  const [isCommandOpen, setIsCommandOpen] = useState(false)
-  const [targetMessageId, setTargetMessageId] = useState<string | null>(null)
-  const [allTags, setAllTags] = useState<TagWithCount[]>([])
-  const [commandInitialSearch, setCommandInitialSearch] = useState('')
+  const {
+    vaultPath,
+    isVaultSetupOpen,
+    appSettings,
+    isInitialized,
+    initialize,
+    selectVault
+  } = useVaultStore()
 
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [isNotebooksLoaded, setIsNotebooksLoaded] = useState(false)
-  const [isTagsLoaded, setIsTagsLoaded] = useState(false)
+  const {
+    notebooks,
+    activeNotebook,
+    isLoaded: isNotebooksLoaded,
+    loadNotebooks,
+    selectNotebook,
+    currentNotebook,
+    restoreLastActiveNotebook
+  } = useNotebookStore()
 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [targetNotebook, setTargetNotebook] = useState<Notebook | null>(null)
-  const [parentNotebook, setParentNotebook] = useState<Notebook | null>(null)
+  const { loadNotes, clearNotes, setEditing, deleteNote } = useNotesStore()
 
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [settingsSection, setSettingsSection] =
-    useState<SettingsSection>('general')
-  const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
+  const { isLoaded: isTagsLoaded, loadTags, removeNoteTags } = useTagsStore()
 
-  const [contextMenu, setContextMenu] = useState<{
-    x: number
-    y: number
-    type: 'notebook' | 'message'
-    data: Notebook | Note
-  } | null>(null)
+  const {
+    isCommandOpen,
+    isSettingsOpen,
+    contextMenu,
+    openCommand,
+    toggleCommand,
+    toggleSettings,
+    openSettings,
+    closeContextMenu,
+    openCreateModal,
+    openEditModal,
+    openDeleteModal
+  } = useUIStore()
 
   const {
     sidebarWidth,
@@ -94,130 +80,50 @@ function App() {
   useKeyboardShortcuts({
     isCommandOpen,
     isSettingsOpen,
-    onToggleCommand: useCallback(() => setIsCommandOpen((prev) => !prev), []),
-    onToggleSettings: useCallback(() => setIsSettingsOpen((prev) => !prev), []),
-    onOpenSettings: useCallback(() => setSettingsSection('general'), [])
+    onToggleCommand: toggleCommand,
+    onToggleSettings: toggleSettings,
+    onOpenSettings: useCallback(() => openSettings('general'), [openSettings])
   })
 
   useEffect(() => {
-    const loadSettings = async () => {
-      const vault = await getVaultPath()
-      const globalSettings = await getAppSettings()
-
-      let accentColor = globalSettings.accentColor
-      if (vault) {
-        const vaultColor = await getVaultAccentColor(vault)
-        if (vaultColor) {
-          accentColor = vaultColor
-        }
-      }
-
-      const settings = { ...globalSettings, accentColor }
-      setAppSettings(settings)
-
-      document.documentElement.style.setProperty('--accent-color', accentColor)
-
-      if (vault) {
-        setVaultPathState(vault)
-        await addKnownVault(vault)
-        const savedWidth = await getSetting<number>('sidebarWidth', 260)
-        setSidebarWidth(savedWidth)
-        const collapsed = await getSetting<boolean>('sidebarCollapsed', false)
-        setIsSidebarCollapsed(collapsed)
-        const lastNotebook = await getSetting<string | null>(
-          'lastActiveNotebook',
-          null
-        )
-        if (lastNotebook) {
-          setActiveNotebook(lastNotebook)
-        }
-      } else {
-        setIsVaultSetupOpen(true)
-      }
-      setIsInitialized(true)
-    }
-    loadSettings()
-  }, [setSidebarWidth, setIsSidebarCollapsed])
+    initialize()
+  }, [initialize])
 
   useEffect(() => {
     if (!vaultPath) return
 
-    const loadNotebooks = async () => {
-      const nbs = await listNotebooks(vaultPath)
-      setNotebooks(nbs)
-      setIsNotebooksLoaded(true)
+    const loadData = async () => {
+      await loadNotebooks(vaultPath)
+      await loadTags(vaultPath)
+      const savedWidth = await getSetting<number>('sidebarWidth', 260)
+      setSidebarWidth(savedWidth)
+      const collapsed = await getSetting<boolean>('sidebarCollapsed', false)
+      setIsSidebarCollapsed(collapsed)
+      await restoreLastActiveNotebook()
     }
-    loadNotebooks()
-  }, [vaultPath])
+    loadData()
+  }, [
+    vaultPath,
+    loadNotebooks,
+    loadTags,
+    setSidebarWidth,
+    setIsSidebarCollapsed,
+    restoreLastActiveNotebook
+  ])
 
   useEffect(() => {
-    if (!vaultPath) return
-
-    const loadTags = async () => {
-      await syncVaultTags(vaultPath)
-      const tags = await getAllTags()
-      setAllTags(tags)
-      setIsTagsLoaded(true)
+    if (isNotebooksLoaded && notebooks.length > 0 && !activeNotebook) {
+      selectNotebook(notebooks[0].relativePath)
     }
-    loadTags()
-  }, [vaultPath])
-
-  const flattenNotebooks = useCallback((nbs: Notebook[]): Notebook[] => {
-    const result: Notebook[] = []
-    for (const nb of nbs) {
-      result.push(nb)
-      if (nb.children) {
-        result.push(...flattenNotebooks(nb.children))
-      }
-    }
-    return result
-  }, [])
-
-  const allNotebooks = useMemo(
-    () => flattenNotebooks(notebooks),
-    [notebooks, flattenNotebooks]
-  )
-
-  useEffect(() => {
-    if (isInitialized && notebooks.length > 0 && !activeNotebook) {
-      const defaultNb = notebooks[0].relativePath
-      setActiveNotebook(defaultNb)
-      saveSetting('lastActiveNotebook', defaultNb)
-    }
-  }, [notebooks, activeNotebook, isInitialized])
+  }, [notebooks, activeNotebook, isNotebooksLoaded, selectNotebook])
 
   useEffect(() => {
     if (!vaultPath || !activeNotebook) {
-      setNotes([])
+      clearNotes()
       return
     }
-
-    const loadNotes = async () => {
-      setIsLoadingNotes(true)
-      try {
-        const metadata = await listNotes(vaultPath, activeNotebook)
-        const loadedNotes: Note[] = []
-        for (const meta of metadata) {
-          const note = await readNote(vaultPath, activeNotebook, meta.filename)
-          loadedNotes.push(note)
-        }
-        setNotes(loadedNotes)
-      } catch (err) {
-        console.error('Failed to load notes:', err)
-        setNotes([])
-      } finally {
-        setIsLoadingNotes(false)
-      }
-    }
-    loadNotes()
-  }, [vaultPath, activeNotebook])
-
-  const notebookMap = useMemo(() => {
-    return allNotebooks.reduce((acc, nb) => {
-      acc[nb.relativePath] = nb.name
-      return acc
-    }, {} as Record<string, string>)
-  }, [allNotebooks])
+    loadNotes(vaultPath, activeNotebook)
+  }, [vaultPath, activeNotebook, loadNotes, clearNotes])
 
   const handleSelectVault = async () => {
     const selected = await open({
@@ -227,244 +133,46 @@ function App() {
     })
 
     if (selected && typeof selected === 'string') {
-      await setVaultPath(selected)
-      setVaultPathState(selected)
-      setIsVaultSetupOpen(false)
+      await selectVault(selected)
     }
   }
-
-  const handleSelectNotebook = (relativePath: string) => {
-    setActiveNotebook(relativePath)
-    setTargetMessageId(null)
-    saveSetting('lastActiveNotebook', relativePath)
-  }
-
-  const handleSendMessage = async (content: string) => {
-    if (!vaultPath || !activeNotebook) return
-    setTargetMessageId(null)
-
-    const newNote = await createNote(vaultPath, activeNotebook, content)
-    setNotes((prev) => [...prev, newNote])
-
-    await syncNoteTags(newNote)
-    const tags = await getAllTags()
-    setAllTags(tags)
-  }
-
-  const handleEditMessage = useCallback(
-    async (filename: string, newContent: string) => {
-      if (!vaultPath || !activeNotebook) return
-
-      const updated = await updateNote(
-        vaultPath,
-        activeNotebook,
-        filename,
-        newContent
-      )
-      setNotes((prev) =>
-        prev.map((n) => (n.filename === filename ? updated : n))
-      )
-      setEditingMessageId(null)
-
-      await syncNoteTags(updated)
-      const tags = await getAllTags()
-      setAllTags(tags)
-    },
-    [vaultPath, activeNotebook]
-  )
 
   const handleDeleteMessage = async (filename: string) => {
     if (!vaultPath || !activeNotebook) return
-
     await removeNoteTags(filename, activeNotebook)
     await deleteNote(vaultPath, activeNotebook, filename)
-    setNotes((prev) => prev.filter((n) => n.filename !== filename))
-
-    const tags = await getAllTags()
-    setAllTags(tags)
   }
-
-  const handleCreateNotebook = async (name: string) => {
-    if (!vaultPath || !name.trim()) return
-
-    const formattedName = name.trim().toLowerCase().replace(/\s+/g, '-')
-    const parentPath = parentNotebook?.relativePath
-    const nb = await createNotebook(vaultPath, formattedName, parentPath)
-
-    const reloadNotebooks = async () => {
-      const nbs = await listNotebooks(vaultPath)
-      setNotebooks(nbs)
-    }
-    await reloadNotebooks()
-
-    setIsCreateModalOpen(false)
-    setParentNotebook(null)
-    handleSelectNotebook(nb.relativePath)
-  }
-
-  const handleUpdateNotebook = async (name: string) => {
-    if (!vaultPath || !targetNotebook || !name.trim()) return
-
-    const newName = name.trim().toLowerCase().replace(/\s+/g, '-')
-    const updated = await renameNotebook(
-      vaultPath,
-      targetNotebook.relativePath,
-      newName
-    )
-
-    const reloadNotebooks = async () => {
-      const nbs = await listNotebooks(vaultPath)
-      setNotebooks(nbs)
-    }
-    await reloadNotebooks()
-
-    if (activeNotebook === targetNotebook.relativePath) {
-      setActiveNotebook(updated.relativePath)
-      saveSetting('lastActiveNotebook', updated.relativePath)
-    }
-    setIsEditModalOpen(false)
-    setTargetNotebook(null)
-  }
-
-  const handleDeleteNotebook = async () => {
-    if (!vaultPath || !targetNotebook) return
-
-    await deleteNotebook(vaultPath, targetNotebook.relativePath)
-
-    const reloadNotebooks = async () => {
-      const nbs = await listNotebooks(vaultPath)
-      setNotebooks(nbs)
-    }
-    await reloadNotebooks()
-
-    setIsDeleteModalOpen(false)
-    setTargetNotebook(null)
-
-    if (activeNotebook === targetNotebook.relativePath) {
-      const remaining = allNotebooks.find(
-        (nb) => nb.relativePath !== targetNotebook.relativePath
-      )
-      const newActive = remaining?.relativePath || null
-      setActiveNotebook(newActive)
-      if (newActive) saveSetting('lastActiveNotebook', newActive)
-    }
-  }
-
-  const updateNotebookInTree = useCallback(
-    (
-      nbs: Notebook[],
-      targetPath: string,
-      updater: (nb: Notebook) => Notebook
-    ): Notebook[] => {
-      return nbs.map((nb) => {
-        if (nb.relativePath === targetPath) {
-          return updater(nb)
-        }
-        if (nb.children) {
-          return {
-            ...nb,
-            children: updateNotebookInTree(nb.children, targetPath, updater)
-          }
-        }
-        return nb
-      })
-    },
-    []
-  )
-
-  const handleTogglePin = async (notebook: Notebook) => {
-    const isPinned = await toggleNotebookPin(notebook.relativePath)
-    setNotebooks((prev) =>
-      updateNotebookInTree(prev, notebook.relativePath, (nb) => ({
-        ...nb,
-        isPinned
-      }))
-    )
-  }
-
-  const onNotebookContextMenu = (e: React.MouseEvent, notebook: Notebook) => {
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      type: 'notebook',
-      data: notebook
-    })
-  }
-
-  const onMessageContextMenu = useCallback(
-    (e: React.MouseEvent, note: Note) => {
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        type: 'message',
-        data: note
-      })
-    },
-    []
-  )
-
-  const handleEditCancel = useCallback(() => {
-    setEditingMessageId(null)
-  }, [])
 
   const handleContextMenuAction = (action: ContextMenuAction) => {
     if (!contextMenu) return
 
     if (contextMenu.type === 'notebook') {
       const notebook = contextMenu.data as Notebook
+      if (!notebook) return
+
       if (action === 'edit') {
-        setTargetNotebook(notebook)
-        setIsEditModalOpen(true)
+        openEditModal(notebook)
       } else if (action === 'delete') {
-        setTargetNotebook(notebook)
-        setIsDeleteModalOpen(true)
+        openDeleteModal(notebook)
       } else if (action === 'create-sub') {
-        setParentNotebook(notebook)
-        setIsCreateModalOpen(true)
+        openCreateModal(notebook)
       } else if (action === 'open-in-explorer') {
         openNotebookInExplorer(notebook.path)
       }
     } else if (contextMenu.type === 'message') {
       const note = contextMenu.data as Note
       if (action === 'edit') {
-        setEditingMessageId(note.filename)
+        setEditing(note.filename)
       } else if (action === 'delete') {
         handleDeleteMessage(note.filename)
       } else if (action === 'copy') {
         navigator.clipboard.writeText(note.content)
       }
     }
-    setContextMenu(null)
+    closeContextMenu()
   }
 
-  const handleSearchResultClick = async (note: Note) => {
-    if (note.notebookName) {
-      setTargetMessageId(note.filename)
-      handleSelectNotebook(note.notebookName)
-    }
-  }
-
-  const handleTagClick = useCallback((tag: string) => {
-    setCommandInitialSearch(`#${tag}`)
-    setIsCommandOpen(true)
-  }, [])
-
-  const handleCloseContextMenu = useCallback(() => {
-    setContextMenu(null)
-  }, [])
-
-  const handleCopyContent = useCallback((content: string) => {
-    navigator.clipboard.writeText(content)
-  }, [])
-
-  const handleOpenSettings = useCallback(() => {
-    setSettingsSection('general')
-    setIsSettingsOpen(true)
-  }, [])
-
-  const currentNotebook = allNotebooks.find(
-    (nb) => nb.relativePath === activeNotebook
-  )
+  const notebook = currentNotebook()
 
   const isFullyLoaded =
     isInitialized &&
@@ -486,7 +194,7 @@ function App() {
       <VaultSetup
         appSettings={appSettings}
         onSelectVault={handleSelectVault}
-        onOpenCommandPalette={() => setIsCommandOpen(true)}
+        onOpenCommandPalette={() => openCommand()}
       />
     )
   }
@@ -496,35 +204,13 @@ function App() {
       <div className="h-screen w-screen bg-transparent font-sans text-textMain">
         <div
           className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background"
-          onClick={() => setContextMenu(null)}
+          onClick={closeContextMenu}
         >
-          <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
+          <TitleBar onOpenCommandPalette={() => openCommand()} />
           <div className="flex flex-1 min-h-0">
             {!isSidebarCollapsed && (
               <>
-                <Sidebar
-                  notebooks={notebooks}
-                  activeNotebook={activeNotebook}
-                  onSelectNotebook={handleSelectNotebook}
-                  onCreateNotebook={() => {
-                    setParentNotebook(null)
-                    setIsCreateModalOpen(true)
-                  }}
-                  onCreateSubnotebook={(parent) => {
-                    setParentNotebook(parent)
-                    setIsCreateModalOpen(true)
-                  }}
-                  onContextMenu={onNotebookContextMenu}
-                  onTogglePin={handleTogglePin}
-                  width={sidebarWidth}
-                  vaultPath={vaultPath}
-                  onOpenSettings={handleOpenSettings}
-                  onSwitchVault={async (path) => {
-                    await setVaultPath(path)
-                    setVaultPathState(path)
-                    window.location.reload()
-                  }}
-                />
+                <Sidebar width={sidebarWidth} />
 
                 <div
                   className={clsx(
@@ -538,75 +224,27 @@ function App() {
 
             <div className="flex-1 flex flex-col min-w-0 bg-background relative shadow-2xl">
               <NotebookHeader
-                notebookName={currentNotebook?.name}
+                notebookName={notebook?.name}
                 isSidebarCollapsed={isSidebarCollapsed}
                 onToggleSidebar={toggleSidebar}
               />
 
               <div className="flex-1 flex flex-row min-h-0 pt-16 relative bg-[#050505]">
                 <div className="flex-1 flex flex-col min-w-0 z-0">
-                  <MessageList
-                    notes={notes}
-                    isLoading={isLoadingNotes}
-                    targetMessageId={targetMessageId}
-                    notebooks={notebookMap}
-                    onContextMenu={onMessageContextMenu}
-                    editingMessageId={editingMessageId}
-                    onEditSubmit={handleEditMessage}
-                    onEditCancel={handleEditCancel}
-                    vaultPath={vaultPath}
-                    onTagClick={handleTagClick}
-                    onEditStart={setEditingMessageId}
-                    onCopy={handleCopyContent}
-                    onDelete={handleDeleteMessage}
-                    onScroll={handleCloseContextMenu}
-                  />
-                  <InputArea
-                    channelName={currentNotebook?.name || 'unknown'}
-                    onSendMessage={handleSendMessage}
-                    vaultPath={vaultPath}
-                  />
+                  <MessageList />
+                  <InputArea />
                 </div>
               </div>
             </div>
 
-            <CommandPalette
-              isOpen={isCommandOpen}
-              setIsOpen={(open) => {
-                setIsCommandOpen(open)
-                if (!open) setCommandInitialSearch('')
-              }}
-              notebooks={notebooks}
-              vaultPath={vaultPath}
-              onSelectNotebook={handleSelectNotebook}
-              onSelectMessage={handleSearchResultClick}
-              onCreateNotebook={() => {
-                setParentNotebook(null)
-                setIsCreateModalOpen(true)
-              }}
-              onOpenSettings={handleOpenSettings}
-              allTags={allTags}
-              initialSearch={commandInitialSearch}
-            />
-
-            <SettingsModal
-              isOpen={isSettingsOpen}
-              onClose={() => setIsSettingsOpen(false)}
-              vaultPath={vaultPath}
-              onAddVault={handleSelectVault}
-              onSwitchVault={async (path) => {
-                await setVaultPath(path)
-                setVaultPathState(path)
-                window.location.reload()
-              }}
-              initialSection={settingsSection}
-            />
+            <CommandPalette />
+            <SettingsModal />
 
             {contextMenu && (
               <ContextMenu
                 x={contextMenu.x}
                 y={contextMenu.y}
-                onClose={() => setContextMenu(null)}
+                onClose={closeContextMenu}
                 onSelect={handleContextMenuAction}
                 items={
                   contextMenu.type === 'notebook'
@@ -655,35 +293,9 @@ function App() {
               />
             )}
 
-            <CreateNotebookModal
-              isOpen={isCreateModalOpen}
-              onClose={() => {
-                setIsCreateModalOpen(false)
-                setParentNotebook(null)
-              }}
-              onSubmit={handleCreateNotebook}
-              parentNotebook={parentNotebook}
-            />
-
-            <EditNotebookModal
-              isOpen={isEditModalOpen}
-              onClose={() => {
-                setIsEditModalOpen(false)
-                setTargetNotebook(null)
-              }}
-              onSubmit={handleUpdateNotebook}
-              notebook={targetNotebook}
-            />
-
-            <DeleteNotebookModal
-              isOpen={isDeleteModalOpen}
-              onClose={() => {
-                setIsDeleteModalOpen(false)
-                setTargetNotebook(null)
-              }}
-              onSubmit={handleDeleteNotebook}
-              notebook={targetNotebook}
-            />
+            <CreateNotebookModal />
+            <EditNotebookModal />
+            <DeleteNotebookModal />
           </div>
         </div>
       </div>

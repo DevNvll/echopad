@@ -13,21 +13,10 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { getKnownVaults, KnownVault } from '../api'
+import { useVaultStore, useNotebookStore, useUIStore } from '../stores'
 
 interface SidebarProps {
-  notebooks: Notebook[]
-  activeNotebook: string | null
-  onSelectNotebook: (relativePath: string) => void
-  onCreateNotebook: () => void
-  onCreateSubnotebook: (parent: Notebook) => void
-  onContextMenu: (e: React.MouseEvent, notebook: Notebook) => void
-  onTogglePin: (notebook: Notebook) => void
   width: number
-  vaultPath: string | null
-  onOpenSettings: (
-    section?: 'general' | 'storage' | 'appearance' | 'about'
-  ) => void
-  onSwitchVault: (path: string) => void
 }
 
 const flattenAllNotebooks = (notebooks: Notebook[]): Notebook[] => {
@@ -173,26 +162,18 @@ const NotebookTreeItem: React.FC<NotebookTreeItemProps> = ({
   )
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  notebooks,
-  activeNotebook,
-  onSelectNotebook,
-  onCreateNotebook,
-  onCreateSubnotebook,
-  onContextMenu,
-  onTogglePin,
-  width,
-  vaultPath,
-  onOpenSettings,
-  onSwitchVault
-}) => {
+export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
+  const { vaultPath, switchVault } = useVaultStore()
+  const { notebooks, activeNotebook, selectNotebook, togglePin } =
+    useNotebookStore()
+  const { openCreateModal, openContextMenu, openSettings } = useUIStore()
+
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
   const [knownVaults, setKnownVaults] = useState<KnownVault[]>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const pinnedNotebooks = collectPinnedNotebooks(notebooks)
-
   const vaultName = vaultPath?.split(/[/\\]/).pop() || 'Unknown Vault'
 
   useEffect(() => {
@@ -243,13 +224,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     })
   }, [])
 
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, notebook: Notebook) => {
+      openContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        type: 'notebook',
+        data: notebook
+      })
+    },
+    [openContextMenu]
+  )
+
   const renderPinnedNotebookItem = (notebook: Notebook) => (
     <button
       key={notebook.relativePath}
-      onClick={() => onSelectNotebook(notebook.relativePath)}
+      onClick={() => selectNotebook(notebook.relativePath)}
       onContextMenu={(e) => {
         e.preventDefault()
-        onContextMenu(e, notebook)
+        handleContextMenu(e, notebook)
       }}
       className={clsx(
         'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mx-0 transition-all text-[14px] group relative font-medium',
@@ -276,7 +269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         tabIndex={0}
         onClick={(e) => {
           e.stopPropagation()
-          onTogglePin(notebook)
+          togglePin(notebook)
         }}
         className="opacity-100 text-brand hover:text-brand transition-opacity p-1 hover:bg-surfaceHighlight rounded"
         title="Unpin Notebook"
@@ -330,7 +323,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => {
                       setIsVaultDropdownOpen(false)
                       if (!isActive) {
-                        onSwitchVault(vault.path)
+                        switchVault(vault.path)
                       }
                     }}
                     className={clsx(
@@ -360,7 +353,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={() => {
                   setIsVaultDropdownOpen(false)
-                  onOpenSettings('storage')
+                  openSettings('storage')
                 }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surfaceHighlight/30 transition-colors"
               >
@@ -395,7 +388,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Notebooks
             </h3>
             <button
-              onClick={onCreateNotebook}
+              onClick={() => openCreateModal()}
               className="text-textMuted hover:text-textMain opacity-0 group-hover:opacity-100 transition-all p-1 rounded hover:bg-surfaceHighlight"
               title="Create Notebook"
             >
@@ -409,10 +402,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={notebook.relativePath}
                 notebook={notebook}
                 activeNotebook={activeNotebook}
-                onSelectNotebook={onSelectNotebook}
-                onCreateSubnotebook={onCreateSubnotebook}
-                onContextMenu={onContextMenu}
-                onTogglePin={onTogglePin}
+                onSelectNotebook={selectNotebook}
+                onCreateSubnotebook={(parent) => openCreateModal(parent)}
+                onContextMenu={handleContextMenu}
+                onTogglePin={togglePin}
                 expandedPaths={expandedPaths}
                 onToggleExpand={handleToggleExpand}
                 depth={0}
@@ -424,7 +417,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <div className="px-3 py-3 border-t border-border/30">
         <button
-          onClick={onOpenSettings}
+          onClick={() => openSettings()}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-textMuted hover:text-textMain hover:bg-surfaceHighlight/50 transition-colors group"
         >
           <Settings

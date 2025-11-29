@@ -33,7 +33,8 @@
     "react-compiler-runtime": "^1.0.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",

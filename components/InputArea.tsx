@@ -1,18 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { ArrowUp, ImagePlus } from 'lucide-react'
 import { saveImage } from '../api'
+import {
+  useVaultStore,
+  useNotebookStore,
+  useNotesStore,
+  useTagsStore
+} from '../stores'
 
-interface InputAreaProps {
-  channelName: string
-  onSendMessage: (content: string) => void
-  vaultPath: string | null
-}
+export const InputArea: React.FC = () => {
+  const { vaultPath } = useVaultStore()
+  const { activeNotebook, currentNotebook } = useNotebookStore()
+  const { createNote } = useNotesStore()
+  const { syncNoteTags } = useTagsStore()
 
-export const InputArea: React.FC<InputAreaProps> = ({
-  channelName,
-  onSendMessage,
-  vaultPath
-}) => {
+  const notebook = currentNotebook()
+  const channelName = notebook?.name || 'unknown'
+
   const [content, setContent] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -28,13 +32,17 @@ export const InputArea: React.FC<InputAreaProps> = ({
     }
   }, [content])
 
+  const handleSendMessage = async () => {
+    if (!vaultPath || !activeNotebook || !content.trim()) return
+    const newNote = await createNote(vaultPath, activeNotebook, content)
+    await syncNoteTags(newNote)
+    setContent('')
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (content.trim()) {
-        onSendMessage(content)
-        setContent('')
-      }
+      handleSendMessage()
     }
   }
 
@@ -148,12 +156,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
 
           <div>
             <button
-              onClick={() => {
-                if (content.trim()) {
-                  onSendMessage(content)
-                  setContent('')
-                }
-              }}
+              onClick={handleSendMessage}
               disabled={!content.trim() || isUploading}
               className="w-8 h-8 flex items-center justify-center rounded-lg bg-brand text-background disabled:opacity-20 disabled:bg-white/10 disabled:text-textMuted transition-all hover:opacity-90 active:scale-95"
             >
