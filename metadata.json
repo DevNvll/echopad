@@ -1,0 +1,5 @@
+{
+  "name": "NoteCord",
+  "description": "A Discord-inspired note taking application with channel-based organization, markdown support, and advanced search operators.",
+  "requestFramePermissions": []
+}

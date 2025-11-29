@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NoteCord</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              background: '#050505', // Almost Pure Black
+              sidebar: '#000000',    // Pure Black
+              surface: '#0a0a0a',    // Zinc 950
+              surfaceHighlight: '#18181b', // Zinc 900
+              border: '#27272a',     // Zinc 800
+              accent: '#e2e8f0',     // Slate 200 (Monochrome Accent)
+              accentHover: '#ffffff', // White
+              brand: '#818cf8',      // Pastel Indigo (Subtle color)
+              textMain: '#fafafa',   // Zinc 50
+              textMuted: '#71717a',  // Zinc 500
+              glass: 'rgba(5, 5, 5, 0.7)',
+            },
+            fontFamily: {
+              sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+              mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
+            },
+            boxShadow: {
+              'glow': '0 0 20px -10px rgba(129, 140, 248, 0.15)',
+            },
+            keyframes: {
+              "overlay-show": {
+                from: { opacity: 0 },
+                to: { opacity: 1 },
+              },
+              "content-show": {
+                from: { opacity: 0, transform: "translate(-50%, -48%) scale(0.96)" },
+                to: { opacity: 1, transform: "translate(-50%, -50%) scale(1)" },
+              },
+            },
+            animation: {
+              "overlay-show": "overlay-show 150ms cubic-bezier(0.16, 1, 0.3, 1)",
+              "content-show": "content-show 150ms cubic-bezier(0.16, 1, 0.3, 1)",
+            },
+          }
+        }
+      }
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+      html, body {
+        background: transparent;
+      }
+
+      body {
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #27272a; 
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #3f3f46; 
+      }
+
+      /* Markdown specific overrides that are hard to do with utility classes only */
+      pre code {
+        background-color: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        color: inherit !important;
+        font-size: inherit !important;
+      }
+    </style>
+    <link rel="stylesheet" href="/index.css">
+  </head>
+  <body class="font-sans text-textMain overflow-hidden h-screen w-screen selection:bg-brand/30 selection:text-white">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+always use pnpm to add new dependecies
+before adding a dependecy, ask for user input first
