@@ -30,7 +30,7 @@ import { MessageList } from './components/MessageList';
 import { Modal } from './components/Modal';
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu';
 import { CommandPalette } from './components/CommandPalette';
-import { Hash, Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react';
+import { Hash, Trash2, Edit2, Copy, FolderOpen, FolderPlus, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TitleBar } from './components/TitleBar';
 
@@ -49,6 +49,7 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isResizing, setIsResizing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'delete' | 'create-sub'>('create');
@@ -72,6 +73,8 @@ function App() {
         setVaultPathState(vault);
         const savedWidth = await getSetting<number>('sidebarWidth', 260);
         setSidebarWidth(savedWidth);
+        const collapsed = await getSetting<boolean>('sidebarCollapsed', false);
+        setIsSidebarCollapsed(collapsed);
         const lastNotebook = await getSetting<string | null>('lastActiveNotebook', null);
         if (lastNotebook) {
           setActiveNotebook(lastNotebook);
@@ -199,6 +202,14 @@ function App() {
       }
     }
   }, [isResizing]);
+
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed(prev => {
+      const newValue = !prev;
+      saveSetting('sidebarCollapsed', newValue);
+      return newValue;
+    });
+  }, []);
 
   useEffect(() => {
     if (isResizing) {
@@ -468,44 +479,53 @@ function App() {
       >
         <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
         <div className="flex flex-1 min-h-0">
+          {!isSidebarCollapsed && (
+        <>
           <Sidebar 
-        notebooks={notebooks}
-        activeNotebook={activeNotebook}
-        onSelectNotebook={handleSelectNotebook}
-        onCreateNotebook={() => {
-          setModalMode('create');
-          setNotebookFormName('');
-          setIsNotebookModalOpen(true);
-        }}
-        onCreateSubnotebook={(parent) => {
-          setModalMode('create-sub');
-          setParentNotebook(parent);
-          setNotebookFormName('');
-          setIsNotebookModalOpen(true);
-        }}
-        onContextMenu={onNotebookContextMenu}
-        onTogglePin={handleTogglePin}
-        width={sidebarWidth}
-        vaultPath={vaultPath}
-        onChangeVault={handleSelectVault}
-      />
+            notebooks={notebooks}
+            activeNotebook={activeNotebook}
+            onSelectNotebook={handleSelectNotebook}
+            onCreateNotebook={() => {
+              setModalMode('create');
+              setNotebookFormName('');
+              setIsNotebookModalOpen(true);
+            }}
+            onCreateSubnotebook={(parent) => {
+              setModalMode('create-sub');
+              setParentNotebook(parent);
+              setNotebookFormName('');
+              setIsNotebookModalOpen(true);
+            }}
+            onContextMenu={onNotebookContextMenu}
+            onTogglePin={handleTogglePin}
+            width={sidebarWidth}
+            vaultPath={vaultPath}
+            onChangeVault={handleSelectVault}
+          />
 
-      <div
-        className={clsx(
-          "w-1 hover:w-1.5 -ml-0.5 hover:-ml-0.75 z-30 cursor-col-resize flex flex-col justify-center items-center transition-all group select-none",
-          isResizing ? "bg-brand/50 w-1.5" : "hover:bg-brand/50"
-        )}
-        onMouseDown={startResizing}
-      >
-      </div>
+          <div
+            className={clsx(
+              "w-1 hover:w-1.5 -ml-0.5 hover:-ml-0.75 z-30 cursor-col-resize flex flex-col justify-center items-center transition-all group select-none",
+              isResizing ? "bg-brand/50 w-1.5" : "hover:bg-brand/50"
+            )}
+            onMouseDown={startResizing}
+          >
+          </div>
+        </>
+      )}
 
       <div className="flex-1 flex flex-col min-w-0 bg-background relative shadow-2xl">
-        <div className="h-16 border-b border-border/40 flex items-center px-8 justify-between bg-glass backdrop-blur-md z-20 absolute top-0 left-0 right-0">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <Hash className="text-textMuted/50" size={24} />
-            <div className="flex flex-col justify-center">
-              <span className="font-bold text-textMain text-base tracking-tight leading-none mb-0.5">{currentNotebook?.name}</span>
-            </div>
+        <div className="h-16 border-b border-border/40 flex items-center pl-4 pr-8 justify-between bg-glass backdrop-blur-md z-20 absolute top-0 left-0 right-0">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <button
+              onClick={toggleSidebar}
+              className="p-2 rounded-md text-textMuted/60 hover:text-textMain hover:bg-surfaceHighlight/50 transition-colors"
+              title={isSidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            >
+              {isSidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+            <Hash className="text-textMuted/50" size={20} />
+            <span className="font-bold text-textMain text-base tracking-tight leading-none">{currentNotebook?.name}</span>
           </div>
         </div>
 
