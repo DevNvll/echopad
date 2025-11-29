@@ -389,7 +389,7 @@ function App() {
     return (
       <div className="h-screen w-screen bg-transparent font-sans text-textMain">
         <div className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background">
-          <TitleBar />
+          <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
           <div className="flex-1 flex items-center justify-center">
             <div className="max-w-md w-full mx-4 bg-surface border border-border rounded-2xl p-8 shadow-2xl">
               <div className="flex flex-col items-center text-center gap-6">
@@ -423,7 +423,7 @@ function App() {
         className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background"
         onClick={() => setContextMenu(null)}
       >
-        <TitleBar />
+        <TitleBar onOpenCommandPalette={() => setIsCommandOpen(true)} />
         <div className="flex flex-1 min-h-0">
           <Sidebar 
         notebooks={notebooks}
