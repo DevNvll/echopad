@@ -44,7 +44,10 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
         </span>
       </div>
 
-      <div data-tauri-drag-region className="flex-1 h-full flex items-center justify-center px-4">
+      <div
+        data-tauri-drag-region
+        className="flex-1 h-full flex items-center justify-center px-4"
+      >
         <button
           onClick={onOpenCommandPalette}
           className="flex items-center gap-2 h-6 w-full max-w-md bg-black/40 border border-border/50 rounded-md px-3 text-textMuted/50 hover:text-textMuted hover:border-border/80 hover:bg-black/60 transition-all cursor-pointer"
@@ -84,4 +87,3 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
     </div>
   )
 }
-

@@ -1,107 +1,119 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ArrowUp, ImagePlus } from 'lucide-react';
-import { saveImage } from '../api';
+import React, { useState, useRef, useEffect } from 'react'
+import { ArrowUp, ImagePlus } from 'lucide-react'
+import { saveImage } from '../api'
 
 interface InputAreaProps {
-  channelName: string;
-  onSendMessage: (content: string) => void;
-  vaultPath: string | null;
+  channelName: string
+  onSendMessage: (content: string) => void
+  vaultPath: string | null
 }
 
-export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage, vaultPath }) => {
-  const [content, setContent] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export const InputArea: React.FC<InputAreaProps> = ({
+  channelName,
+  onSendMessage,
+  vaultPath
+}) => {
+  const [content, setContent] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 300)}px`;
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        300
+      )}px`
     }
-  }, [content]);
+  }, [content])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+      e.preventDefault()
       if (content.trim()) {
-        onSendMessage(content);
-        setContent('');
+        onSendMessage(content)
+        setContent('')
       }
     }
-  };
+  }
 
   const insertImageMarkdown = (relativePath: string) => {
-    const textarea = textareaRef.current;
+    const textarea = textareaRef.current
     if (!textarea) {
-      setContent(prev => prev + `![](${relativePath})`);
-      return;
+      setContent((prev) => prev + `![](${relativePath})`)
+      return
     }
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const imageMarkdown = `![](${relativePath})`;
-    const newContent = content.substring(0, start) + imageMarkdown + content.substring(end);
-    setContent(newContent);
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const imageMarkdown = `![](${relativePath})`
+    const newContent =
+      content.substring(0, start) + imageMarkdown + content.substring(end)
+    setContent(newContent)
 
     setTimeout(() => {
-      textarea.focus();
-      const newCursorPos = start + imageMarkdown.length;
-      textarea.setSelectionRange(newCursorPos, newCursorPos);
-    }, 0);
-  };
+      textarea.focus()
+      const newCursorPos = start + imageMarkdown.length
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
+    }, 0)
+  }
 
   const processImageFile = async (file: File) => {
-    if (!vaultPath) return;
-    if (!file.type.startsWith('image/')) return;
+    if (!vaultPath) return
+    if (!file.type.startsWith('image/')) return
 
-    setIsUploading(true);
+    setIsUploading(true)
     try {
-      const arrayBuffer = await file.arrayBuffer();
+      const arrayBuffer = await file.arrayBuffer()
       const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      
-      const extension = file.name.split('.').pop()?.toLowerCase() || 
-        file.type.split('/')[1] || 'png';
-      
-      const relativePath = await saveImage(vaultPath, base64, extension);
-      insertImageMarkdown(relativePath);
+        new Uint8Array(arrayBuffer).reduce(
+          (data, byte) => data + String.fromCharCode(byte),
+          ''
+        )
+      )
+
+      const extension =
+        file.name.split('.').pop()?.toLowerCase() ||
+        file.type.split('/')[1] ||
+        'png'
+
+      const relativePath = await saveImage(vaultPath, base64, extension)
+      insertImageMarkdown(relativePath)
     } catch (err) {
-      console.error('Failed to save image:', err);
+      console.error('Failed to save image:', err)
     } finally {
-      setIsUploading(false);
+      setIsUploading(false)
     }
-  };
+  }
 
   const handlePaste = async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
+    const items = e.clipboardData.items
     for (const item of items) {
       if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
+        e.preventDefault()
+        const file = item.getAsFile()
         if (file) {
-          await processImageFile(file);
+          await processImageFile(file)
         }
-        return;
+        return
       }
     }
-  };
+  }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]
     if (file) {
-      await processImageFile(file);
+      await processImageFile(file)
     }
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = ''
     }
-  };
+  }
 
   return (
     <div className="absolute bottom-0 left-0 right-0 flex justify-center w-full z-20 pointer-events-none">
       <div className="w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col transition-all overflow-hidden pointer-events-auto">
-        
         <div className="px-4 pt-4 pb-2">
           <textarea
             ref={textareaRef}
@@ -135,21 +147,21 @@ export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage
           </div>
 
           <div>
-             <button 
-                onClick={() => {
-                  if (content.trim()) {
-                    onSendMessage(content);
-                    setContent('');
-                  }
-                }}
-                disabled={!content.trim() || isUploading}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-textMain text-background disabled:opacity-20 disabled:bg-white/10 disabled:text-textMuted transition-all hover:opacity-90 active:scale-95"
-             >
-                <ArrowUp size={18} strokeWidth={2.5} />
-             </button>
+            <button
+              onClick={() => {
+                if (content.trim()) {
+                  onSendMessage(content)
+                  setContent('')
+                }
+              }}
+              disabled={!content.trim() || isUploading}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-textMain text-background disabled:opacity-20 disabled:bg-white/10 disabled:text-textMuted transition-all hover:opacity-90 active:scale-95"
+            >
+              <ArrowUp size={18} strokeWidth={2.5} />
+            </button>
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

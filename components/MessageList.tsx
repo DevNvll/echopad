@@ -196,7 +196,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
           <code
             {...props}
             className={clsx(
-              'bg-surfaceHighlight border border-border/50 rounded px-1.5 py-[1px] text-[85%] font-mono text-accent',
+              'bg-surfaceHighlight border border-border/50 rounded px-1.5 py-px text-[85%] font-mono text-accent',
               className
             )}
           />
@@ -280,7 +280,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             </>
           ) : (
             <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-surfaceHighlight to-transparent border border-white/5 flex items-center justify-center mb-2 shadow-lg">
+              <div className="w-16 h-16 rounded-3xl bg-linear-to-tr from-surfaceHighlight to-transparent border border-white/5 flex items-center justify-center mb-2 shadow-lg">
                 <span className="text-4xl">✨</span>
               </div>
               <p className="text-base font-medium text-textMuted">
@@ -298,7 +298,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
           className="flex-1 overflow-y-auto custom-scrollbar py-2 flex flex-col"
           onScroll={handleScroll}
         >
-          <div className="flex-grow" />
+          <div className="grow" />
           <div className="w-full max-w-4xl mx-auto pb-28">
             {notes.map((note, index) => {
               const prevNote = index > 0 ? notes[index - 1] : null
@@ -328,7 +328,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
                       ? 'mx-3 mt-4 pb-4 border-b border-border/30 last:border-0 cursor-pointer hover:bg-surfaceHighlight/40 hover:border-border/60 rounded-xl px-4'
                       : isEditing
                       ? 'bg-surfaceHighlight/30 pl-[80px] pr-8 py-3 mt-1'
-                      : 'hover:bg-[#0a0a0a] pl-[80px] pr-8 pt-1.5 pb-1.5',
+                      : 'hover:bg-surface pl-[80px] pr-8 pt-1.5 pb-1.5',
                     !isSearching && !isEditing && (isGrouped ? 'mt-0' : 'mt-5')
                   )}
                 >

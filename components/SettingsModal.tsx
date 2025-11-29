@@ -1,38 +1,42 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Settings, Palette, Info, X, HardDrive } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react'
+import { Settings, Palette, Info, X, HardDrive } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { useTheme } from '@/contexts/ThemeContext';
-import { cn } from '@/lib/utils';
-import { getKnownVaults, removeKnownVault, KnownVault } from '@/api';
+  DialogTitle
+} from '@/components/ui/dialog'
+import { useTheme } from '@/contexts/ThemeContext'
+import { cn } from '@/lib/utils'
+import { getKnownVaults, removeKnownVault, KnownVault } from '@/api'
 import {
   GeneralSettings,
   StorageSettings,
   AppearanceSettings,
-  AboutSettings,
-} from './settings';
+  AboutSettings
+} from './settings'
 
-export type SettingsSection = 'general' | 'storage' | 'appearance' | 'about';
+export type SettingsSection = 'general' | 'storage' | 'appearance' | 'about'
 
 interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  vaultPath: string | null;
-  onAddVault: () => void;
-  onSwitchVault: (path: string) => void;
-  initialSection?: SettingsSection;
+  isOpen: boolean
+  onClose: () => void
+  vaultPath: string | null
+  onAddVault: () => void
+  onSwitchVault: (path: string) => void
+  initialSection?: SettingsSection
 }
 
-const NAV_ITEMS: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
+const NAV_ITEMS: {
+  id: SettingsSection
+  label: string
+  icon: React.ReactNode
+}[] = [
   { id: 'general', label: 'General', icon: <Settings size={16} /> },
   { id: 'storage', label: 'Storage', icon: <HardDrive size={16} /> },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
-  { id: 'about', label: 'About', icon: <Info size={16} /> },
-];
+  { id: 'about', label: 'About', icon: <Info size={16} /> }
+]
 
 export function SettingsModal({
   isOpen,
@@ -40,71 +44,92 @@ export function SettingsModal({
   vaultPath,
   onAddVault,
   onSwitchVault,
-  initialSection,
+  initialSection
 }: SettingsModalProps) {
-  const { settings, updateAccentColor, updateAccentColorForAllVaults, updateAppName } = useTheme();
-  const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection || 'general');
-  const [localAppName, setLocalAppName] = useState(settings.appName);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [knownVaults, setKnownVaults] = useState<KnownVault[]>([]);
+  const {
+    settings,
+    updateAccentColor,
+    updateAccentColorForAllVaults,
+    updateAppName
+  } = useTheme()
+  const [activeSection, setActiveSection] = useState<SettingsSection>(
+    initialSection || 'general'
+  )
+  const [localAppName, setLocalAppName] = useState(settings.appName)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [knownVaults, setKnownVaults] = useState<KnownVault[]>([])
 
-  const vaultName = vaultPath?.split(/[/\\]/).pop() || null;
+  const vaultName = vaultPath?.split(/[/\\]/).pop() || null
 
   const loadVaults = useCallback(async () => {
-    const vaults = await getKnownVaults();
-    setKnownVaults(vaults);
-  }, []);
+    const vaults = await getKnownVaults()
+    setKnownVaults(vaults)
+  }, [])
 
   useEffect(() => {
     if (isOpen) {
-      loadVaults();
-      setActiveSection(initialSection || 'general');
+      loadVaults()
+      setActiveSection(initialSection || 'general')
     }
-  }, [isOpen, loadVaults, initialSection]);
+  }, [isOpen, loadVaults, initialSection])
 
   useEffect(() => {
     if (isOpen) {
-      setLocalAppName(settings.appName);
+      setLocalAppName(settings.appName)
     }
-  }, [isOpen, settings.appName]);
+  }, [isOpen, settings.appName])
 
-  const handleAppNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalAppName(e.target.value);
-  }, []);
+  const handleAppNameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setLocalAppName(e.target.value)
+    },
+    []
+  )
 
   const handleAppNameBlur = useCallback(() => {
     if (localAppName.trim() && localAppName !== settings.appName) {
-      updateAppName(localAppName.trim());
+      updateAppName(localAppName.trim())
     }
-  }, [localAppName, settings.appName, updateAppName]);
+  }, [localAppName, settings.appName, updateAppName])
 
-  const handleColorSelect = useCallback((color: string) => {
-    updateAccentColor(color);
-  }, [updateAccentColor]);
+  const handleColorSelect = useCallback(
+    (color: string) => {
+      updateAccentColor(color)
+    },
+    [updateAccentColor]
+  )
 
-  const handleRemoveVault = useCallback(async (path: string) => {
-    await removeKnownVault(path);
-    await loadVaults();
-  }, [loadVaults]);
+  const handleRemoveVault = useCallback(
+    async (path: string) => {
+      await removeKnownVault(path)
+      await loadVaults()
+    },
+    [loadVaults]
+  )
 
   const handleAddVault = useCallback(() => {
-    onAddVault();
-    onClose();
-  }, [onAddVault, onClose]);
+    onAddVault()
+    onClose()
+  }, [onAddVault, onClose])
 
-  const handleSwitchVault = useCallback((path: string) => {
-    onSwitchVault(path);
-    onClose();
-  }, [onSwitchVault, onClose]);
+  const handleSwitchVault = useCallback(
+    (path: string) => {
+      onSwitchVault(path)
+      onClose()
+    },
+    [onSwitchVault, onClose]
+  )
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent 
-        className="w-full max-w-4xl p-0 gap-0 bg-[#0a0a0a] border-border overflow-hidden"
+      <DialogContent
+        className="w-full max-w-4xl p-0 gap-0 bg-surface border-border overflow-hidden"
         showCloseButton={false}
       >
         <DialogHeader className="px-4 py-3 border-b border-border/50 flex-row items-center justify-between">
-          <DialogTitle className="text-base font-semibold">Settings</DialogTitle>
+          <DialogTitle className="text-base font-semibold">
+            Settings
+          </DialogTitle>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors"
@@ -153,12 +178,12 @@ export function SettingsModal({
         </div>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 interface SettingsNavProps {
-  activeSection: SettingsSection;
-  onSectionChange: (section: SettingsSection) => void;
+  activeSection: SettingsSection
+  onSectionChange: (section: SettingsSection) => void
 }
 
 function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps) {
@@ -169,10 +194,10 @@ function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps) {
           key={item.id}
           onClick={() => onSectionChange(item.id)}
           className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left",
+            'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left',
             activeSection === item.id
-              ? "bg-brand/20 text-brand"
-              : "text-textMuted hover:text-textMain hover:bg-surfaceHighlight/50"
+              ? 'bg-brand/20 text-brand'
+              : 'text-textMuted hover:text-textMain hover:bg-surfaceHighlight/50'
           )}
         >
           {item.icon}
@@ -180,5 +205,5 @@ function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps) {
         </button>
       ))}
     </nav>
-  );
+  )
 }
