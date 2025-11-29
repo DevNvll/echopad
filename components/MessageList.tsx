@@ -1,11 +1,77 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Note } from '../types'
 import { formatMessageDate, shouldGroupMessages } from '../utils/formatting'
 import { LinkPreview } from './LinkPreview'
 import { NoteImage } from './NoteImage'
-import { Search, Hash } from 'lucide-react'
+import { Search, Hash, Edit2, Copy, Trash2, Check } from 'lucide-react'
 import { clsx } from 'clsx'
+
+const EditTextarea: React.FC<{
+  initialContent: string
+  onSubmit: (content: string) => void
+  onCancel: () => void
+}> = React.memo(({ initialContent, onSubmit, onCancel }) => {
+  const [content, setContent] = useState(initialContent)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+    }
+  }, [])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (content.trim()) {
+        onSubmit(content)
+      }
+    } else if (e.key === 'Escape') {
+      onCancel()
+    }
+  }
+
+  return (
+    <div className="w-full">
+      <textarea
+        ref={textareaRef}
+        value={content}
+        onChange={(e) => {
+          setContent(e.target.value)
+          e.target.style.height = 'auto'
+          e.target.style.height = e.target.scrollHeight + 'px'
+        }}
+        onKeyDown={handleKeyDown}
+        className="w-full bg-surfaceHighlight border border-border/60 rounded-md p-3 text-[15px] text-textMain focus:outline-none focus:border-brand/50 resize-none overflow-hidden font-sans leading-relaxed"
+        rows={1}
+      />
+      <div className="text-[11px] text-textMuted mt-2 flex gap-2">
+        <span>
+          escape to{' '}
+          <span
+            onClick={onCancel}
+            className="text-brand hover:underline cursor-pointer"
+          >
+            cancel
+          </span>
+        </span>
+        <span>•</span>
+        <span>
+          enter to{' '}
+          <span
+            onClick={() => content.trim() && onSubmit(content)}
+            className="text-brand hover:underline cursor-pointer"
+          >
+            save
+          </span>
+        </span>
+      </div>
+    </div>
+  )
+})
 
 interface MessageListProps {
   notes: Note[]
@@ -20,6 +86,10 @@ interface MessageListProps {
   onEditCancel?: () => void
   vaultPath?: string | null
   onTagClick?: (tag: string) => void
+  onEditStart?: (filename: string) => void
+  onCopy?: (content: string) => void
+  onDelete?: (filename: string) => void
+  onScroll?: () => void
 }
 
 export const MessageList: React.FC<MessageListProps> = React.memo(
@@ -35,18 +105,33 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     onEditSubmit,
     onEditCancel,
     vaultPath,
-    onTagClick
+    onTagClick,
+    onEditStart,
+    onCopy,
+    onDelete,
+    onScroll
   }) {
-    const [editContent, setEditContent] = useState('')
-    const editAreaRef = useRef<HTMLTextAreaElement>(null)
+    const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
     const bottomRef = useRef<HTMLDivElement>(null)
     const prevNotesLengthRef = useRef(notes.length)
+    const deleteConfirmIdRef = useRef(deleteConfirmId)
+    deleteConfirmIdRef.current = deleteConfirmId
+
+    const handleScroll = useCallback(() => {
+      if (deleteConfirmIdRef.current) {
+        setDeleteConfirmId(null)
+      }
+      onScroll?.()
+    }, [onScroll])
 
     useEffect(() => {
       if (isLoading || isSearching) return
 
       if (notes.length > prevNotesLengthRef.current) {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+        })
       }
       prevNotesLengthRef.current = notes.length
     }, [notes.length, isLoading, isSearching])
@@ -69,33 +154,105 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       }
     }, [isSearching, targetMessageId, isLoading])
 
-    useEffect(() => {
-      if (editingMessageId) {
-        const note = notes.find((n) => n.filename === editingMessageId)
-        if (note) {
-          setEditContent(note.content)
-          setTimeout(() => {
-            if (editAreaRef.current) {
-              editAreaRef.current.focus()
-              editAreaRef.current.style.height = 'auto'
-              editAreaRef.current.style.height =
-                editAreaRef.current.scrollHeight + 'px'
-            }
-          }, 0)
+    const markdownComponents = useMemo(
+      () => ({
+        h1: ({ node, ...props }: any) => (
+          <h1
+            {...props}
+            className="text-2xl font-bold text-textMain mt-4 mb-2 pb-1 border-b border-border/50"
+          />
+        ),
+        h2: ({ node, ...props }: any) => (
+          <h2
+            {...props}
+            className="text-xl font-bold text-textMain mt-3 mb-2"
+          />
+        ),
+        h3: ({ node, ...props }: any) => (
+          <h3
+            {...props}
+            className="text-lg font-bold text-textMain mt-3 mb-1"
+          />
+        ),
+        h4: ({ node, ...props }: any) => (
+          <h4
+            {...props}
+            className="text-base font-bold text-textMain mt-2 mb-1"
+          />
+        ),
+        strong: ({ node, ...props }: any) => (
+          <strong {...props} className="font-semibold text-textMain" />
+        ),
+        em: ({ node, ...props }: any) => (
+          <em {...props} className="italic text-textMain/90" />
+        ),
+        blockquote: ({ node, ...props }: any) => (
+          <blockquote
+            {...props}
+            className="border-l-[3px] border-brand/40 pl-4 py-1 my-2 text-textMuted italic bg-surfaceHighlight/5 rounded-r"
+          />
+        ),
+        code: ({ node, className, ...props }: any) => (
+          <code
+            {...props}
+            className={clsx(
+              'bg-surfaceHighlight border border-border/50 rounded px-1.5 py-[1px] text-[85%] font-mono text-accent',
+              className
+            )}
+          />
+        ),
+        pre: ({ node, ...props }: any) => (
+          <pre
+            {...props}
+            className="bg-black/40 border border-border/50 rounded-lg p-4 my-3 overflow-x-auto text-sm font-mono text-textMuted/90 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+          />
+        ),
+        ul: ({ node, ...props }: any) => (
+          <ul
+            {...props}
+            className="list-disc list-outside ml-5 mb-2 space-y-1 text-textMuted marker:text-brand/50"
+          />
+        ),
+        ol: ({ node, ...props }: any) => (
+          <ol
+            {...props}
+            className="list-decimal list-outside ml-5 mb-2 space-y-1 text-textMuted marker:text-brand/50"
+          />
+        ),
+        a: ({ node, ...props }: any) => (
+          <a
+            {...props}
+            className="text-brand hover:underline hover:text-accentHover transition-colors cursor-pointer"
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          />
+        ),
+        p: ({ node, ...props }: any) => (
+          <p {...props} className="mb-1 last:mb-0" />
+        ),
+        img: ({ node, src, alt, ...props }: any) => {
+          if (
+            src &&
+            vaultPath &&
+            !src.startsWith('http://') &&
+            !src.startsWith('https://') &&
+            !src.startsWith('data:')
+          ) {
+            return <NoteImage src={src} alt={alt} vaultPath={vaultPath} />
+          }
+          return (
+            <img
+              src={src}
+              alt={alt || ''}
+              className="max-w-full h-auto rounded-lg my-2"
+              {...props}
+            />
+          )
         }
-      }
-    }, [editingMessageId, notes])
-
-    const handleEditKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        if (editingMessageId && editContent.trim()) {
-          onEditSubmit?.(editingMessageId, editContent)
-        }
-      } else if (e.key === 'Escape') {
-        onEditCancel?.()
-      }
-    }
+      }),
+      [vaultPath]
+    )
 
     if (isLoading) {
       return (
@@ -108,7 +265,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
 
     if (notes.length === 0) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-textMuted/50 gap-4 p-8 text-center select-none">
+        <div className="flex-1 flex flex-col items-center justify-center text-textMuted/50 gap-4 p-8 pb-28 text-center select-none">
           {isSearching ? (
             <>
               <div className="w-14 h-14 bg-surfaceHighlight rounded-2xl flex items-center justify-center border border-border">
@@ -137,267 +294,208 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
 
     return (
       <div className="flex-1 relative flex flex-col min-h-0">
-        <div className="flex-1 overflow-y-auto custom-scrollbar py-2 flex flex-col">
+        <div
+          className="flex-1 overflow-y-auto custom-scrollbar py-2 flex flex-col"
+          onScroll={handleScroll}
+        >
           <div className="flex-grow" />
-          {notes.map((note, index) => {
-            const prevNote = index > 0 ? notes[index - 1] : null
-            const isGrouped =
-              !isSearching &&
-              shouldGroupMessages(note.createdAt, prevNote?.createdAt || null)
-            const dateLabel = formatMessageDate(note.createdAt)
-            const notebookName = notebooks ? notebooks[note.notebookName] : null
-            const isEditing = editingMessageId === note.filename
+          <div className="w-full max-w-4xl mx-auto pb-28">
+            {notes.map((note, index) => {
+              const prevNote = index > 0 ? notes[index - 1] : null
+              const isGrouped =
+                !isSearching &&
+                shouldGroupMessages(note.createdAt, prevNote?.createdAt || null)
+              const dateLabel = formatMessageDate(note.createdAt)
+              const notebookName = notebooks
+                ? notebooks[note.notebookName]
+                : null
+              const isEditing = editingMessageId === note.filename
 
-            return (
-              <div
-                key={note.filename}
-                id={`message-${note.filename}`}
-                onClick={() => isSearching && onNoteClick?.(note)}
-                onContextMenu={(e) => {
-                  if (!isSearching && onContextMenu) {
-                    e.preventDefault()
-                    onContextMenu(e, note)
-                  }
-                }}
-                className={clsx(
-                  'group relative transition-colors duration-100',
-                  isSearching
-                    ? 'mx-3 mt-4 pb-4 border-b border-border/30 last:border-0 cursor-pointer hover:bg-surfaceHighlight/40 hover:border-border/60 rounded-xl px-4'
-                    : isEditing
-                    ? 'bg-surfaceHighlight/30 pl-[80px] pr-8 py-3 mt-1'
-                    : 'hover:bg-[#0a0a0a] pl-[80px] pr-8',
-                  !isSearching &&
-                    !isEditing &&
-                    (isGrouped ? 'mt-1 py-0.5' : 'mt-6 py-0.5')
-                )}
-              >
-                {isSearching && notebookName && (
-                  <div className="flex items-center gap-2 mb-2 opacity-60">
-                    <div className="flex items-center gap-1 text-[11px] font-bold text-textMuted uppercase tracking-wider bg-surfaceHighlight/50 px-2 py-0.5 rounded">
-                      <Hash size={11} />
-                      {notebookName}
-                    </div>
-                    <span className="text-[11px] text-textMuted">
-                      {dateLabel}
-                    </span>
-                  </div>
-                )}
-
-                {!isSearching && (
-                  <div className="absolute left-0 top-0 w-[80px] flex justify-end pr-5 select-none">
-                    {!isGrouped || isEditing ? (
-                      <span className="text-[11px] font-bold text-textMuted/60 uppercase tracking-wide mt-[7px]">
-                        {new Date(note.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
-                      </span>
-                    ) : (
-                      <span className="hidden group-hover:inline text-[10px] text-textMuted/30 font-mono mt-2 tabular-nums">
-                        {new Date(note.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex-1 min-w-0">
-                  {!isSearching && !isGrouped && !isEditing && (
-                    <div className="mb-1 flex items-baseline gap-2">
-                      <span className="text-[12px] font-bold text-brand/80 tracking-wide">
+              return (
+                <div
+                  key={note.filename}
+                  id={`message-${note.filename}`}
+                  onClick={() => isSearching && onNoteClick?.(note)}
+                  onContextMenu={(e) => {
+                    if (!isSearching && onContextMenu) {
+                      e.preventDefault()
+                      onContextMenu(e, note)
+                    }
+                  }}
+                  className={clsx(
+                    'group relative transition-colors duration-100',
+                    isSearching
+                      ? 'mx-3 mt-4 pb-4 border-b border-border/30 last:border-0 cursor-pointer hover:bg-surfaceHighlight/40 hover:border-border/60 rounded-xl px-4'
+                      : isEditing
+                      ? 'bg-surfaceHighlight/30 pl-[80px] pr-8 py-3 mt-1'
+                      : 'hover:bg-[#0a0a0a] pl-[80px] pr-8 pt-1.5 pb-1.5',
+                    !isSearching && !isEditing && (isGrouped ? 'mt-0' : 'mt-5')
+                  )}
+                >
+                  {isSearching && notebookName && (
+                    <div className="flex items-center gap-2 mb-2 opacity-60">
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-textMuted uppercase tracking-wider bg-surfaceHighlight/50 px-2 py-0.5 rounded">
+                        <Hash size={11} />
+                        {notebookName}
+                      </div>
+                      <span className="text-[11px] text-textMuted">
                         {dateLabel}
                       </span>
                     </div>
                   )}
 
-                  {isEditing ? (
-                    <div className="w-full">
-                      <textarea
-                        ref={editAreaRef}
-                        value={editContent}
-                        onChange={(e) => {
-                          setEditContent(e.target.value)
-                          e.target.style.height = 'auto'
-                          e.target.style.height = e.target.scrollHeight + 'px'
-                        }}
-                        onKeyDown={handleEditKeyDown}
-                        className="w-full bg-surfaceHighlight border border-border/60 rounded-md p-3 text-[15px] text-textMain focus:outline-none focus:border-brand/50 resize-none overflow-hidden font-sans leading-relaxed"
-                        rows={1}
-                      />
-                      <div className="text-[11px] text-textMuted mt-2 flex gap-2">
-                        <span>
-                          escape to{' '}
-                          <span
-                            onClick={onEditCancel}
-                            className="text-brand hover:underline cursor-pointer"
-                          >
-                            cancel
-                          </span>
+                  {!isSearching && (
+                    <div className="absolute left-0 top-0 w-[80px] flex justify-end pr-5 select-none">
+                      {!isGrouped || isEditing ? (
+                        <span className="text-[11px] font-bold text-textMuted/60 uppercase tracking-wide mt-[7px]">
+                          {new Date(note.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
                         </span>
-                        <span>•</span>
-                        <span>
-                          enter to{' '}
-                          <span
-                            onClick={() =>
-                              editingMessageId &&
-                              onEditSubmit?.(editingMessageId, editContent)
-                            }
-                            className="text-brand hover:underline cursor-pointer"
-                          >
-                            save
-                          </span>
+                      ) : (
+                        <span className="hidden group-hover:inline text-[10px] text-textMuted/30 font-mono mt-2 tabular-nums">
+                          {new Date(note.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
                         </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-textMain/95 text-[15px] leading-relaxed markdown-content font-sans tracking-normal">
-                      <ReactMarkdown
-                        components={{
-                          h1: ({ node, ...props }) => (
-                            <h1
-                              {...props}
-                              className="text-2xl font-bold text-textMain mt-4 mb-2 pb-1 border-b border-border/50"
-                            />
-                          ),
-                          h2: ({ node, ...props }) => (
-                            <h2
-                              {...props}
-                              className="text-xl font-bold text-textMain mt-3 mb-2"
-                            />
-                          ),
-                          h3: ({ node, ...props }) => (
-                            <h3
-                              {...props}
-                              className="text-lg font-bold text-textMain mt-3 mb-1"
-                            />
-                          ),
-                          h4: ({ node, ...props }) => (
-                            <h4
-                              {...props}
-                              className="text-base font-bold text-textMain mt-2 mb-1"
-                            />
-                          ),
-                          strong: ({ node, ...props }) => (
-                            <strong
-                              {...props}
-                              className="font-semibold text-textMain"
-                            />
-                          ),
-                          em: ({ node, ...props }) => (
-                            <em
-                              {...props}
-                              className="italic text-textMain/90"
-                            />
-                          ),
-                          blockquote: ({ node, ...props }) => (
-                            <blockquote
-                              {...props}
-                              className="border-l-[3px] border-brand/40 pl-4 py-1 my-2 text-textMuted italic bg-surfaceHighlight/5 rounded-r"
-                            />
-                          ),
-                          code: ({ node, className, ...props }) => (
-                            <code
-                              {...props}
-                              className={clsx(
-                                'bg-surfaceHighlight border border-border/50 rounded px-1.5 py-[1px] text-[85%] font-mono text-accent',
-                                className
-                              )}
-                            />
-                          ),
-                          pre: ({ node, ...props }) => (
-                            <pre
-                              {...props}
-                              className="bg-black/40 border border-border/50 rounded-lg p-4 my-3 overflow-x-auto text-sm font-mono text-textMuted/90 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-                            />
-                          ),
-                          ul: ({ node, ...props }) => (
-                            <ul
-                              {...props}
-                              className="list-disc list-outside ml-5 mb-2 space-y-1 text-textMuted marker:text-brand/50"
-                            />
-                          ),
-                          ol: ({ node, ...props }) => (
-                            <ol
-                              {...props}
-                              className="list-decimal list-outside ml-5 mb-2 space-y-1 text-textMuted marker:text-brand/50"
-                            />
-                          ),
-                          a: ({ node, ...props }) => (
-                            <a
-                              {...props}
-                              className="text-brand hover:underline hover:text-accentHover transition-colors cursor-pointer"
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          ),
-                          p: ({ node, ...props }) => (
-                            <p {...props} className="mb-1 last:mb-0" />
-                          ),
-                          img: ({ node, src, alt, ...props }) => {
-                            if (
-                              src &&
-                              vaultPath &&
-                              !src.startsWith('http://') &&
-                              !src.startsWith('https://') &&
-                              !src.startsWith('data:')
-                            ) {
-                              return (
-                                <NoteImage
-                                  src={src}
-                                  alt={alt}
-                                  vaultPath={vaultPath}
-                                />
-                              )
-                            }
-                            return (
-                              <img
-                                src={src}
-                                alt={alt || ''}
-                                className="max-w-full h-auto rounded-lg my-2"
-                                {...props}
-                              />
-                            )
-                          }
-                        }}
-                      >
-                        {note.content}
-                      </ReactMarkdown>
-
-                      {note.tags && note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2.5 opacity-80 hover:opacity-100 transition-opacity">
-                          {note.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onTagClick?.(tag)
-                              }}
-                              className="text-[11px] bg-brand/5 text-brand border border-brand/10 px-2 py-0.5 rounded hover:bg-brand/10 cursor-pointer transition-colors select-none font-medium"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
                       )}
-
-                      {note.urls &&
-                        note.urls.map((url, i) => (
-                          <div key={i} onClick={(e) => e.stopPropagation()}>
-                            <LinkPreview url={url} />
-                          </div>
-                        ))}
                     </div>
                   )}
+
+                  <div className="flex-1 min-w-0">
+                    {!isSearching && !isGrouped && !isEditing && (
+                      <div className="mb-1 flex items-baseline gap-2">
+                        <span className="text-[12px] font-bold text-brand/80 tracking-wide">
+                          {dateLabel}
+                        </span>
+                      </div>
+                    )}
+
+                    {isEditing ? (
+                      <EditTextarea
+                        initialContent={note.content}
+                        onSubmit={(content) =>
+                          onEditSubmit?.(note.filename, content)
+                        }
+                        onCancel={() => onEditCancel?.()}
+                      />
+                    ) : (
+                      <div className="text-textMain/95 text-[15px] leading-relaxed markdown-content font-sans tracking-normal">
+                        <ReactMarkdown components={markdownComponents}>
+                          {note.content}
+                        </ReactMarkdown>
+
+                        {note.tags && note.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2.5 opacity-80 hover:opacity-100 transition-opacity">
+                            {note.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onTagClick?.(tag)
+                                }}
+                                className="text-[11px] bg-brand/5 text-brand border border-brand/10 px-2 py-0.5 rounded hover:bg-brand/10 cursor-pointer transition-colors select-none font-medium"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {note.urls &&
+                          note.urls.map((url, i) => (
+                            <div key={i} onClick={(e) => e.stopPropagation()}>
+                              <LinkPreview url={url} />
+                            </div>
+                          ))}
+
+                        {!isSearching && (
+                          <div className="h-6 flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onEditStart?.(note.filename)
+                              }}
+                              className="h-6 px-2 flex items-center gap-1.5 text-[11px] text-textMuted hover:text-textMain hover:bg-white/5 rounded transition-colors"
+                            >
+                              <Edit2 size={12} />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onCopy?.(note.content)
+                                setCopiedMessageId(note.filename)
+                                setTimeout(() => setCopiedMessageId(null), 1500)
+                              }}
+                              className={clsx(
+                                'h-6 px-2 flex items-center gap-1.5 text-[11px] rounded transition-colors',
+                                copiedMessageId === note.filename
+                                  ? 'text-green-400 bg-green-400/10'
+                                  : 'text-textMuted hover:text-textMain hover:bg-white/5'
+                              )}
+                            >
+                              {copiedMessageId === note.filename ? (
+                                <>
+                                  <Check size={12} />
+                                  <span>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy size={12} />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                            {deleteConfirmId === note.filename ? (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onDelete?.(note.filename)
+                                    setDeleteConfirmId(null)
+                                  }}
+                                  className="h-6 px-2 flex items-center gap-1.5 text-[11px] text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded transition-colors"
+                                >
+                                  <Trash2 size={12} />
+                                  <span>Confirm</span>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDeleteConfirmId(null)
+                                  }}
+                                  className="h-6 px-2 flex items-center text-[11px] text-textMuted hover:text-textMain hover:bg-white/5 rounded transition-colors"
+                                >
+                                  <span>Cancel</span>
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleteConfirmId(note.filename)
+                                }}
+                                className="h-6 px-2 flex items-center gap-1.5 text-[11px] text-red-400/70 hover:text-red-400 hover:bg-red-400/5 rounded transition-colors"
+                              >
+                                <Trash2 size={12} />
+                                <span>Delete</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-          <div ref={bottomRef} className="h-4" />
+              )
+            })}
+            <div ref={bottomRef} className="h-px" />
+          </div>
         </div>
       </div>
     )

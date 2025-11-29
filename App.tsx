@@ -404,6 +404,14 @@ function App() {
     setIsCommandOpen(true);
   }, []);
 
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleCopyContent = useCallback((content: string) => {
+    navigator.clipboard.writeText(content);
+  }, []);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -514,6 +522,10 @@ function App() {
               onEditCancel={handleEditCancel}
               vaultPath={vaultPath}
               onTagClick={handleTagClick}
+              onEditStart={setEditingMessageId}
+              onCopy={handleCopyContent}
+              onDelete={handleDeleteMessage}
+              onScroll={handleCloseContextMenu}
             />
             <InputArea 
               channelName={currentNotebook?.name || 'unknown'} 

@@ -99,8 +99,8 @@ export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage
   };
 
   return (
-    <div className="shrink-0 flex justify-center w-full bg-transparent z-20 relative">
-      <div className="w-full max-w-4xl bg-surfaceHighlight border-t border-x border-border/40 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col transition-all overflow-hidden group">
+    <div className="absolute bottom-0 left-0 right-0 flex justify-center w-full z-20 pointer-events-none">
+      <div className="w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col transition-all overflow-hidden pointer-events-auto">
         
         <div className="px-4 pt-4 pb-2">
           <textarea
@@ -109,7 +109,7 @@ export const InputArea: React.FC<InputAreaProps> = ({ channelName, onSendMessage
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={`Message #${channelName}`}
+            placeholder={`Type your message here...`}
             rows={1}
             className="w-full bg-transparent text-textMain placeholder-textMuted/40 resize-none outline-none text-[15px] leading-relaxed min-h-[40px] max-h-[300px] overflow-y-auto font-sans custom-scrollbar"
           />
