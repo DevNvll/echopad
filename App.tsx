@@ -502,7 +502,7 @@ function App() {
   }, [])
 
   const handleOpenSettings = useCallback((section?: SettingsSection) => {
-    setSettingsSection(section || 'general')
+    setSettingsSection('general')
     setIsSettingsOpen(true)
   }, [])
 

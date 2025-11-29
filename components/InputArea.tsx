@@ -113,7 +113,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
 
   return (
     <div className="absolute bottom-0 left-0 right-0 flex justify-center w-full z-20 pointer-events-none">
-      <div className="w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col transition-all overflow-hidden pointer-events-auto">
+      <div className="w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col transition-all overflow-hidden pointer-events-auto focus-within:shadow-[0_0_15px_-5px_color-mix(in_srgb,var(--accent-color)_20%,transparent)] focus-within:border-brand/30">
         <div className="px-4 pt-4 pb-2">
           <textarea
             ref={textareaRef}
@@ -155,7 +155,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
                 }
               }}
               disabled={!content.trim() || isUploading}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-textMain text-background disabled:opacity-20 disabled:bg-white/10 disabled:text-textMuted transition-all hover:opacity-90 active:scale-95"
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-brand text-background disabled:opacity-20 disabled:bg-white/10 disabled:text-textMuted transition-all hover:opacity-90 active:scale-95"
             >
               <ArrowUp size={18} strokeWidth={2.5} />
             </button>
