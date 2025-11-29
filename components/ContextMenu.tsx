@@ -1,7 +1,12 @@
 import React, { useEffect, useRef } from 'react'
 import { Trash2, Edit2, Copy } from 'lucide-react'
 
-export type ContextMenuAction = 'edit' | 'delete' | 'copy' | 'create-sub'
+export type ContextMenuAction =
+  | 'edit'
+  | 'delete'
+  | 'copy'
+  | 'create-sub'
+  | 'open-in-explorer'
 
 interface ContextMenuItem {
   label: string

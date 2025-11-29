@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import Database from '@tauri-apps/plugin-sql';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { Note, NoteMetadata, Notebook, AppSettings } from './types';
 import { extractTags, extractUrls } from './utils/formatting';
 
@@ -420,5 +421,9 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
   if (settings.accentColor !== undefined) {
     await saveSetting('accentColor', settings.accentColor);
   }
+}
+
+export async function openNotebookInExplorer(notebookPath: string): Promise<void> {
+  await revealItemInDir(notebookPath);
 }
 

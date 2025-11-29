@@ -25,7 +25,8 @@ import {
   TagWithCount,
   getAppSettings,
   addKnownVault,
-  getVaultAccentColor
+  getVaultAccentColor,
+  openNotebookInExplorer
 } from './api'
 import { Sidebar } from './components/Sidebar'
 import { InputArea } from './components/InputArea'
@@ -467,6 +468,8 @@ function App() {
       } else if (action === 'create-sub') {
         setParentNotebook(notebook)
         setIsCreateModalOpen(true)
+      } else if (action === 'open-in-explorer') {
+        openNotebookInExplorer(notebook.path)
       }
     } else if (contextMenu.type === 'message') {
       const note = contextMenu.data as Note
@@ -727,6 +730,11 @@ function App() {
                           label: 'Edit Notebook',
                           action: 'edit',
                           icon: <Edit2 size={12} />
+                        },
+                        {
+                          label: 'Open in Explorer',
+                          action: 'open-in-explorer',
+                          icon: <FolderOpen size={12} />
                         },
                         {
                           label: 'Delete Notebook',
