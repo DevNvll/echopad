@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Settings, Palette, Info, X, HardDrive } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
@@ -113,7 +113,7 @@ export function SettingsModal() {
   )
 
   const handleAddVault = useCallback(async () => {
-    const selected = await invoke('open', {
+    const selected = await open({
       directory: true,
       multiple: false,
       title: 'Select Vault Folder'
