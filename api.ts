@@ -481,3 +481,11 @@ export async function openNotebookInExplorer(notebookPath: string): Promise<void
   await revealItemInDir(notebookPath);
 }
 
+export async function getQuickCaptureNotebook(): Promise<string | null> {
+  return getSetting<string | null>('quickCaptureNotebook', null);
+}
+
+export async function setQuickCaptureNotebook(notebookPath: string): Promise<void> {
+  await saveSetting('quickCaptureNotebook', notebookPath);
+}
+

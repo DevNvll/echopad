@@ -2,6 +2,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Notebook {
@@ -281,6 +283,44 @@ fn save_image(vault_path: String, image_data: String, extension: String) -> Resu
     Ok(format!("attachments/{}", filename))
 }
 
+fn show_quick_capture(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("quick-capture") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+        window.center().map_err(|e| e.to_string())?;
+    } else {
+        let window = WebviewWindowBuilder::new(
+            &app,
+            "quick-capture",
+            WebviewUrl::App("index.html".into()),
+        )
+        .title("Quick Capture")
+        .inner_size(420.0, 48.0)
+        .max_inner_size(420.0, 48.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .center()
+        .skip_taskbar(true)
+        .shadow(false)
+        .visible_on_all_workspaces(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+        
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_quick_capture(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("quick-capture") {
+        window.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -290,6 +330,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .setup(|app| {
+            let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
+            let app_handle = app.handle().clone();
+            
+            app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    let _ = show_quick_capture(app_handle.clone());
+                }
+            })?;
+            
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             list_notebooks,
             create_notebook,
@@ -301,6 +354,7 @@ pub fn run() {
             update_note,
             delete_note,
             save_image,
+            hide_quick_capture,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
