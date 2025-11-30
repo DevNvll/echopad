@@ -36,15 +36,12 @@ pub struct ScanResult {
 
 /// File extensions to sync (markdown and common attachments)
 const SYNC_EXTENSIONS: &[&str] = &[
-    "md", "markdown", "txt",
-    "png", "jpg", "jpeg", "gif", "webp", "svg",
-    "pdf", "json", "yaml", "yml", "toml",
+    "md", "markdown", "txt", "png", "jpg", "jpeg", "gif", "webp", "svg", "pdf", "json", "yaml",
+    "yml", "toml",
 ];
 
 /// Directories to skip
-const SKIP_DIRS: &[&str] = &[
-    ".git", ".obsidian", ".trash", "node_modules", ".sync",
-];
+const SKIP_DIRS: &[&str] = &[".git", ".obsidian", ".trash", "node_modules", ".sync"];
 
 /// Scan a vault directory and return information about all syncable files
 pub fn scan_vault(vault_path: &Path) -> SyncResult<ScanResult> {
@@ -238,4 +235,3 @@ mod tests {
         assert_eq!(changes.deleted[0], "deleted.md");
     }
 }
-

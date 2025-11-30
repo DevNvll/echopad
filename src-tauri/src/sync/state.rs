@@ -1,4 +1,8 @@
 //! Sync state management with JSON file persistence
+//! 
+//! State is keyed by `vault_id` (remote vault identifier) rather than local path,
+//! allowing the same remote vault to be connected from different local paths
+//! (e.g., after moving a vault folder or connecting from different devices).
 
 #![allow(dead_code)]
 
@@ -14,11 +18,13 @@ use super::error::{SyncError, SyncResult};
 use super::scanner::scan_vault;
 use super::types::{VaultSyncState, VaultSyncStatus};
 
-/// Sync state for a vault
+/// Sync state for a vault (keyed by vault_id)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultState {
+    /// The remote vault ID (primary identifier)
+    pub vault_id: String,
+    /// Current local path for this vault on this device
     pub vault_path: String,
-    pub vault_id: Option<String>,
     pub enabled: bool,
     pub last_cursor: Option<String>,
     pub last_sync_at: Option<u64>,
@@ -27,10 +33,10 @@ pub struct VaultState {
 }
 
 impl VaultState {
-    pub fn new(vault_path: String) -> Self {
+    pub fn new(vault_id: String, vault_path: String) -> Self {
         Self {
+            vault_id,
             vault_path,
-            vault_id: None,
             enabled: false,
             last_cursor: None,
             last_sync_at: None,
@@ -42,7 +48,7 @@ impl VaultState {
     pub fn to_status(&self, pending_changes: u32) -> VaultSyncStatus {
         VaultSyncStatus {
             vault_path: self.vault_path.clone(),
-            vault_id: self.vault_id.clone(),
+            vault_id: Some(self.vault_id.clone()),
             enabled: self.enabled,
             status: self.status.clone(),
             last_sync_at: self.last_sync_at,
@@ -62,19 +68,36 @@ pub struct FileSyncState {
 }
 
 /// Persisted state structure (saved to JSON)
+/// 
+/// Note: vaults and file_states are keyed by `vault_id` (remote vault identifier),
+/// not by local file path. This allows the same vault to be connected from
+/// different local paths across devices or after moving the vault folder.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct PersistedState {
+    /// Version of the state format for migration purposes
+    #[serde(default)]
+    version: u32,
+    /// Vault states keyed by vault_id (remote ID)
     vaults: HashMap<String, VaultState>,
+    /// File states keyed by vault_id (remote ID), then by relative file path
     file_states: HashMap<String, HashMap<String, FileSyncState>>,
+    /// Mapping from local vault paths to vault_ids for quick lookup
+    #[serde(default)]
+    path_to_vault_id: HashMap<String, String>,
 }
+
+/// Current state format version
+const STATE_VERSION: u32 = 2;
 
 /// Sync state manager with JSON file persistence
 pub struct SyncStateManager {
-    /// State for each vault (keyed by vault path)
+    /// State for each vault (keyed by vault_id - the remote vault identifier)
     vaults: Arc<RwLock<HashMap<String, VaultState>>>,
-    /// File states for each vault
+    /// File states for each vault (keyed by vault_id, then by relative path)
     file_states: Arc<RwLock<HashMap<String, HashMap<String, FileSyncState>>>>,
-    /// Decrypted vault keys (in memory only)
+    /// Mapping from local vault paths to vault_ids for quick lookup
+    path_to_vault_id: Arc<RwLock<HashMap<String, String>>>,
+    /// Decrypted vault keys (in memory only, keyed by vault_id)
     vault_keys: Arc<RwLock<HashMap<String, CryptoKey>>>,
     /// Path to the JSON state file
     state_file: PathBuf,
@@ -93,6 +116,7 @@ impl SyncStateManager {
         let manager = Self {
             vaults: Arc::new(RwLock::new(HashMap::new())),
             file_states: Arc::new(RwLock::new(HashMap::new())),
+            path_to_vault_id: Arc::new(RwLock::new(HashMap::new())),
             vault_keys: Arc::new(RwLock::new(HashMap::new())),
             state_file,
             dirty: Arc::new(RwLock::new(false)),
@@ -107,17 +131,71 @@ impl SyncStateManager {
     }
 
     // ==========================================
+    // Path to Vault ID mapping
+    // ==========================================
+
+    /// Get vault_id for a given local path
+    pub fn get_vault_id_for_path(&self, vault_path: &str) -> Option<String> {
+        self.path_to_vault_id.read().get(vault_path).cloned()
+    }
+
+    /// Register a path-to-vault_id mapping
+    fn register_path_mapping(&self, vault_path: &str, vault_id: &str) {
+        self.path_to_vault_id.write().insert(vault_path.to_string(), vault_id.to_string());
+    }
+
+    /// Remove a path mapping
+    fn remove_path_mapping(&self, vault_path: &str) {
+        self.path_to_vault_id.write().remove(vault_path);
+    }
+
+    /// Update the local path for a vault (e.g., when vault folder is moved)
+    pub fn update_vault_path(&self, vault_id: &str, new_path: &str) {
+        // Remove old path mapping
+        let old_path = {
+            let vaults = self.vaults.read();
+            vaults.get(vault_id).map(|v| v.vault_path.clone())
+        };
+        
+        if let Some(old) = old_path {
+            self.path_to_vault_id.write().remove(&old);
+        }
+        
+        // Update vault state with new path
+        {
+            let mut vaults = self.vaults.write();
+            if let Some(state) = vaults.get_mut(vault_id) {
+                state.vault_path = new_path.to_string();
+            }
+        }
+        
+        // Add new path mapping
+        self.path_to_vault_id.write().insert(new_path.to_string(), vault_id.to_string());
+        self.mark_dirty();
+    }
+
+    // ==========================================
     // Vault state management
     // ==========================================
 
-    /// Get vault state
+    /// Get vault state by vault_id
+    pub fn get_vault_state_by_id(&self, vault_id: &str) -> Option<VaultState> {
+        self.vaults.read().get(vault_id).cloned()
+    }
+
+    /// Get vault state by local path (convenience method)
     pub fn get_vault_state(&self, vault_path: &str) -> Option<VaultState> {
-        self.vaults.read().get(vault_path).cloned()
+        // First try to find by path mapping
+        let vault_id = self.get_vault_id_for_path(vault_path)?;
+        self.get_vault_state_by_id(&vault_id)
     }
 
     /// Set vault state (in memory and mark dirty for persistence)
     pub fn set_vault_state(&self, state: VaultState) {
-        self.vaults.write().insert(state.vault_path.clone(), state);
+        // Update path mapping
+        self.register_path_mapping(&state.vault_path, &state.vault_id);
+        // Store state by vault_id
+        self.vaults.write().insert(state.vault_id.clone(), state);
         self.mark_dirty();
     }
 
@@ -131,21 +209,33 @@ impl SyncStateManager {
         {
             let mut vaults = self.vaults.write();
             let state = vaults
-                .entry(vault_path.to_string())
-                .or_insert_with(|| VaultState::new(vault_path.to_string()));
+                .entry(vault_id.to_string())
+                .or_insert_with(|| VaultState::new(vault_id.to_string(), vault_path.to_string()));
             
+            // Update the path in case it changed (vault moved)
+            state.vault_path = vault_path.to_string();
             state.enabled = true;
-            state.vault_id = Some(vault_id.to_string());
             state.status = VaultSyncState::Idle;
         }
+        // Register path mapping
+        self.register_path_mapping(vault_path, vault_id);
         self.mark_dirty();
     }
 
-    /// Disable sync for a vault
+    /// Disable sync for a vault (by local path)
     pub fn disable_vault(&self, vault_path: &str) {
+        let vault_id = match self.get_vault_id_for_path(vault_path) {
+            Some(id) => id,
+            None => return,
+        };
+        self.disable_vault_by_id(&vault_id);
+    }
+
+    /// Disable sync for a vault (by vault_id)
+    pub fn disable_vault_by_id(&self, vault_id: &str) {
         {
             let mut vaults = self.vaults.write();
-            if let Some(state) = vaults.get_mut(vault_path) {
+            if let Some(state) = vaults.get_mut(vault_id) {
                 state.enabled = false;
                 state.status = VaultSyncState::Disabled;
             }
@@ -153,22 +243,40 @@ impl SyncStateManager {
         self.mark_dirty();
     }
 
-    /// Update vault sync status
+    /// Update vault sync status (by local path)
     pub fn update_vault_status(&self, vault_path: &str, status: VaultSyncState) {
+        let vault_id = match self.get_vault_id_for_path(vault_path) {
+            Some(id) => id,
+            None => return,
+        };
+        self.update_vault_status_by_id(&vault_id, status);
+    }
+
+    /// Update vault sync status (by vault_id)
+    pub fn update_vault_status_by_id(&self, vault_id: &str, status: VaultSyncState) {
         {
             let mut vaults = self.vaults.write();
-            if let Some(state) = vaults.get_mut(vault_path) {
+            if let Some(state) = vaults.get_mut(vault_id) {
                 state.status = status;
             }
         }
         self.mark_dirty();
     }
 
-    /// Set vault error
+    /// Set vault error (by local path)
     pub fn set_vault_error(&self, vault_path: &str, error: Option<String>) {
+        let vault_id = match self.get_vault_id_for_path(vault_path) {
+            Some(id) => id,
+            None => return,
+        };
+        self.set_vault_error_by_id(&vault_id, error);
+    }
+
+    /// Set vault error (by vault_id)
+    pub fn set_vault_error_by_id(&self, vault_id: &str, error: Option<String>) {
         {
             let mut vaults = self.vaults.write();
-            if let Some(state) = vaults.get_mut(vault_path) {
+            if let Some(state) = vaults.get_mut(vault_id) {
                 state.last_error = error;
                 if state.last_error.is_some() {
                     state.status = VaultSyncState::Error;
@@ -178,11 +286,20 @@ impl SyncStateManager {
         self.mark_dirty();
     }
 
-    /// Update last sync time and cursor
+    /// Update last sync time and cursor (by local path)
     pub fn update_sync_cursor(&self, vault_path: &str, cursor: String) {
+        let vault_id = match self.get_vault_id_for_path(vault_path) {
+            Some(id) => id,
+            None => return,
+        };
+        self.update_sync_cursor_by_id(&vault_id, cursor);
+    }
+
+    /// Update last sync time and cursor (by vault_id)
+    pub fn update_sync_cursor_by_id(&self, vault_id: &str, cursor: String) {
         {
             let mut vaults = self.vaults.write();
-            if let Some(state) = vaults.get_mut(vault_path) {
+            if let Some(state) = vaults.get_mut(vault_id) {
                 state.last_cursor = Some(cursor);
                 state.last_sync_at = Some(Self::now());
             }
@@ -190,11 +307,20 @@ impl SyncStateManager {
         self.mark_dirty();
     }
 
-    /// Update last sync time (after successful sync)
+    /// Update last sync time (by local path, after successful sync)
     pub fn update_last_sync(&self, vault_path: &str) {
+        let vault_id = match self.get_vault_id_for_path(vault_path) {
+            Some(id) => id,
+            None => return,
+        };
+        self.update_last_sync_by_id(&vault_id);
+    }
+
+    /// Update last sync time (by vault_id, after successful sync)
+    pub fn update_last_sync_by_id(&self, vault_id: &str) {
         {
             let mut vaults = self.vaults.write();
-            if let Some(state) = vaults.get_mut(vault_path) {
+            if let Some(state) = vaults.get_mut(vault_id) {
                 state.last_sync_at = Some(Self::now());
                 state.status = VaultSyncState::Idle;
             }
@@ -202,58 +328,92 @@ impl SyncStateManager {
         self.mark_dirty();
     }
 
-    /// Get last sync cursor for a vault
+    /// Get last sync cursor for a vault (by local path)
     pub fn get_cursor(&self, vault_path: &str) -> Option<String> {
+        let vault_id = self.get_vault_id_for_path(vault_path)?;
+        self.get_cursor_by_id(&vault_id)
+    }
+
+    /// Get last sync cursor for a vault (by vault_id)
+    pub fn get_cursor_by_id(&self, vault_id: &str) -> Option<String> {
         self.vaults.read()
-            .get(vault_path)
+            .get(vault_id)
             .and_then(|s| s.last_cursor.clone())
     }
 
     // ==========================================
-    // File state management
+    // File state management (keyed by vault_id)
     // ==========================================
 
-    /// Get file sync state
-    pub fn get_file_state(&self, vault_path: &str, relative_path: &str) -> Option<FileSyncState> {
+    /// Get file sync state (by vault_id)
+    pub fn get_file_state_by_id(&self, vault_id: &str, relative_path: &str) -> Option<FileSyncState> {
         self.file_states.read()
-            .get(vault_path)
+            .get(vault_id)
             .and_then(|files| files.get(relative_path).cloned())
     }
 
-    /// Set file sync state
-    pub fn set_file_state(&self, vault_path: &str, state: FileSyncState) {
+    /// Get file sync state (by local path - convenience method)
+    pub fn get_file_state(&self, vault_path: &str, relative_path: &str) -> Option<FileSyncState> {
+        let vault_id = self.get_vault_id_for_path(vault_path)?;
+        self.get_file_state_by_id(&vault_id, relative_path)
+    }
+
+    /// Set file sync state (by vault_id)
+    pub fn set_file_state_by_id(&self, vault_id: &str, state: FileSyncState) {
         {
             let mut file_states = self.file_states.write();
             file_states
-                .entry(vault_path.to_string())
+                .entry(vault_id.to_string())
                 .or_insert_with(HashMap::new)
                 .insert(state.relative_path.clone(), state);
         }
         self.mark_dirty();
     }
 
-    /// Remove file state
-    pub fn remove_file_state(&self, vault_path: &str, relative_path: &str) {
+    /// Set file sync state (by local path - convenience method)
+    pub fn set_file_state(&self, vault_path: &str, state: FileSyncState) {
+        if let Some(vault_id) = self.get_vault_id_for_path(vault_path) {
+            self.set_file_state_by_id(&vault_id, state);
+        }
+    }
+
+    /// Remove file state (by vault_id)
+    pub fn remove_file_state_by_id(&self, vault_id: &str, relative_path: &str) {
         {
             let mut file_states = self.file_states.write();
-            if let Some(files) = file_states.get_mut(vault_path) {
+            if let Some(files) = file_states.get_mut(vault_id) {
                 files.remove(relative_path);
             }
         }
         self.mark_dirty();
     }
 
-    /// Get all file states for a vault
-    pub fn get_all_file_states(&self, vault_path: &str) -> Vec<FileSyncState> {
+    /// Remove file state (by local path - convenience method)
+    pub fn remove_file_state(&self, vault_path: &str, relative_path: &str) {
+        if let Some(vault_id) = self.get_vault_id_for_path(vault_path) {
+            self.remove_file_state_by_id(&vault_id, relative_path);
+        }
+    }
+
+    /// Get all file states for a vault (by vault_id)
+    pub fn get_all_file_states_by_id(&self, vault_id: &str) -> Vec<FileSyncState> {
         self.file_states.read()
-            .get(vault_path)
+            .get(vault_id)
             .map(|files| files.values().cloned().collect())
             .unwrap_or_default()
     }
 
-    /// Check if a file needs sync
-    pub fn needs_sync(&self, vault_path: &str, relative_path: &str, current_hash: &str) -> bool {
-        match self.get_file_state(vault_path, relative_path) {
+    /// Get all file states for a vault (by local path - convenience method)
+    pub fn get_all_file_states(&self, vault_path: &str) -> Vec<FileSyncState> {
+        match self.get_vault_id_for_path(vault_path) {
+            Some(vault_id) => self.get_all_file_states_by_id(&vault_id),
+            None => Vec::new(),
+        }
+    }
+
+    /// Check if a file needs sync (by vault_id)
+    pub fn needs_sync_by_id(&self, vault_id: &str, relative_path: &str, current_hash: &str) -> bool {
+        match self.get_file_state_by_id(vault_id, relative_path) {
             Some(state) => {
                 // File needs sync if local hash differs from what we last synced
                 state.local_hash.as_ref() != Some(&current_hash.to_string())
@@ -262,11 +422,19 @@ impl SyncStateManager {
         }
     }
 
-    /// Mark file as synced
-    pub fn mark_synced(&self, vault_path: &str, relative_path: &str, hash: &str, version: u32) {
+    /// Check if a file needs sync (by local path - convenience method)
+    pub fn needs_sync(&self, vault_path: &str, relative_path: &str, current_hash: &str) -> bool {
+        match self.get_vault_id_for_path(vault_path) {
+            Some(vault_id) => self.needs_sync_by_id(&vault_id, relative_path, current_hash),
+            None => true, // No vault mapping, assume needs sync
+        }
+    }
+
+    /// Mark file as synced (by vault_id)
+    pub fn mark_synced_by_id(&self, vault_id: &str, relative_path: &str, hash: &str, version: u32) {
         let now = Self::now();
 
-        self.set_file_state(vault_path, FileSyncState {
+        self.set_file_state_by_id(vault_id, FileSyncState {
             relative_path: relative_path.to_string(),
             local_hash: Some(hash.to_string()),
             remote_hash: Some(hash.to_string()),
@@ -275,8 +443,15 @@ impl SyncStateManager {
         });
     }
 
+    /// Mark file as synced (by local path - convenience method)
+    pub fn mark_synced(&self, vault_path: &str, relative_path: &str, hash: &str, version: u32) {
+        if let Some(vault_id) = self.get_vault_id_for_path(vault_path) {
+            self.mark_synced_by_id(&vault_id, relative_path, hash, version);
+        }
+    }
+
     // ==========================================
-    // Vault key management (in-memory only)
+    // Vault key management (in-memory only, keyed by vault_id)
     // ==========================================
 
     /// Store decrypted vault key
@@ -300,11 +475,12 @@ impl SyncStateManager {
 
     /// Count pending changes for a vault by comparing current files with stored state
     pub fn count_pending_changes(&self, vault_path: &str) -> u32 {
-        // Check if vault is enabled
-        let _vault_state = match self.get_vault_state(vault_path) {
+        // Check if vault is enabled and get vault_id
+        let vault_state = match self.get_vault_state(vault_path) {
             Some(s) if s.enabled => s,
             _ => return 0,
         };
+        let vault_id = &vault_state.vault_id;
 
         // Scan current files
         let path = Path::new(vault_path);
@@ -313,9 +489,9 @@ impl SyncStateManager {
             Err(_) => return 0,
         };
 
-        // Get stored file states
+        // Get stored file states (keyed by vault_id)
         let file_states = self.file_states.read();
-        let stored_states = file_states.get(vault_path);
+        let stored_states = file_states.get(vault_id);
 
         let mut pending = 0u32;
 
@@ -372,9 +548,16 @@ impl SyncStateManager {
         let persisted: PersistedState = serde_json::from_str(&content)
             .map_err(SyncError::Json)?;
 
-        // Load into memory
-        *self.vaults.write() = persisted.vaults;
-        *self.file_states.write() = persisted.file_states;
+        // Check if migration is needed (version 0 or 1 = old format keyed by path)
+        if persisted.version < STATE_VERSION {
+            println!("[SyncState] Migrating state from version {} to {}", persisted.version, STATE_VERSION);
+            self.migrate_from_v1(persisted)?;
+        } else {
+            // Load directly into memory (already keyed by vault_id)
+            *self.vaults.write() = persisted.vaults;
+            *self.file_states.write() = persisted.file_states;
+            *self.path_to_vault_id.write() = persisted.path_to_vault_id;
+        }
 
         let vault_count = self.vaults.read().len();
         let file_count: usize = self.file_states.read()
@@ -388,11 +571,70 @@ impl SyncStateManager {
         Ok(())
     }
 
+    /// Migrate from v1 format (keyed by vault_path) to v2 (keyed by vault_id)
+    fn migrate_from_v1(&self, old_state: PersistedState) -> SyncResult<()> {
+        let mut new_vaults = HashMap::new();
+        let mut new_file_states = HashMap::new();
+        let mut path_mapping = HashMap::new();
+
+        for (old_key, mut vault_state) in old_state.vaults {
+            // In v1, the key was vault_path. Check if vault_id exists.
+            // If vault_state.vault_id is empty, use the old key as a fallback identifier
+            let vault_id = if vault_state.vault_id.is_empty() {
+                // Generate a deterministic ID from the path for migration
+                // This is a fallback - normally vault_id should be set
+                format!("migrated_{}", compute_simple_hash(&old_key))
+            } else {
+                vault_state.vault_id.clone()
+            };
+
+            // Ensure vault_id field is set
+            vault_state.vault_id = vault_id.clone();
+            
+            // The old key was the vault_path
+            vault_state.vault_path = old_key.clone();
+
+            // Create path -> vault_id mapping
+            path_mapping.insert(old_key.clone(), vault_id.clone());
+
+            // Store by vault_id
+            new_vaults.insert(vault_id.clone(), vault_state);
+
+            // Migrate file states for this vault
+            if let Some(files) = old_state.file_states.get(&old_key) {
+                new_file_states.insert(vault_id, files.clone());
+            }
+        }
+
+        // Also migrate any file states that might exist for vaults not in the vaults map
+        for (old_key, files) in &old_state.file_states {
+            if !path_mapping.contains_key(old_key) {
+                // Orphaned file states - try to find their vault_id
+                if let Some(vault_id) = path_mapping.get(old_key) {
+                    new_file_states.insert(vault_id.clone(), files.clone());
+                }
+            }
+        }
+
+        // Store migrated state
+        *self.vaults.write() = new_vaults;
+        *self.file_states.write() = new_file_states;
+        *self.path_to_vault_id.write() = path_mapping;
+
+        // Save the migrated state immediately
+        self.save_sync()?;
+        
+        println!("[SyncState] Migration complete");
+        Ok(())
+    }
+
     /// Save state to JSON file (synchronous)
     fn save_sync(&self) -> SyncResult<()> {
         let persisted = PersistedState {
+            version: STATE_VERSION,
             vaults: self.vaults.read().clone(),
             file_states: self.file_states.read().clone(),
+            path_to_vault_id: self.path_to_vault_id.read().clone(),
         };
 
         // Ensure parent directory exists
@@ -424,6 +666,7 @@ impl SyncStateManager {
     pub fn clear(&self) {
         self.vaults.write().clear();
         self.file_states.write().clear();
+        self.path_to_vault_id.write().clear();
         self.vault_keys.write().clear();
 
         // Delete state file
@@ -432,11 +675,42 @@ impl SyncStateManager {
         }
     }
 
-    /// Clear file states for a specific vault
+    /// Clear file states for a specific vault (by local path)
     pub fn clear_vault_file_states(&self, vault_path: &str) {
+        if let Some(vault_id) = self.get_vault_id_for_path(vault_path) {
+            self.clear_vault_file_states_by_id(&vault_id);
+        }
+    }
+
+    /// Clear file states for a specific vault (by vault_id)
+    pub fn clear_vault_file_states_by_id(&self, vault_id: &str) {
         {
             let mut file_states = self.file_states.write();
-            file_states.remove(vault_path);
+            file_states.remove(vault_id);
+        }
+        self.mark_dirty();
+    }
+
+    /// Remove a vault completely (by local path)
+    pub fn remove_vault(&self, vault_path: &str) {
+        if let Some(vault_id) = self.get_vault_id_for_path(vault_path) {
+            self.remove_vault_by_id(&vault_id);
+        }
+        // Also remove the path mapping
+        self.remove_path_mapping(vault_path);
+        self.mark_dirty();
+    }
+
+    /// Remove a vault completely (by vault_id)
+    pub fn remove_vault_by_id(&self, vault_id: &str) {
+        // Get the path before removing so we can clean up the mapping
+        let vault_path = self.vaults.read().get(vault_id).map(|v| v.vault_path.clone());
+        
+        self.vaults.write().remove(vault_id);
+        self.file_states.write().remove(vault_id);
+        
+        if let Some(path) = vault_path {
+            self.path_to_vault_id.write().remove(&path);
         }
         self.mark_dirty();
     }
@@ -455,9 +729,19 @@ impl Clone for SyncStateManager {
         Self {
             vaults: Arc::clone(&self.vaults),
             file_states: Arc::clone(&self.file_states),
+            path_to_vault_id: Arc::clone(&self.path_to_vault_id),
             vault_keys: Arc::clone(&self.vault_keys),
             state_file: self.state_file.clone(),
             dirty: Arc::clone(&self.dirty),
         }
     }
+}
+
+/// Simple hash function for migration (not cryptographic, just for generating IDs)
+fn compute_simple_hash(s: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    s.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }

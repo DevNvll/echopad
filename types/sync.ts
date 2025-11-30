@@ -91,5 +91,9 @@ export interface VaultConnectionInfo {
   is_same_user: boolean;
   /** Whether sync is already enabled for this vault in memory */
   is_already_enabled: boolean;
+  /** If the vault was previously at a different path (moved), this contains the old path */
+  previous_path: string | null;
+  /** Whether this vault has existing file sync state (from this or previous path) */
+  has_existing_state: boolean;
 }
 

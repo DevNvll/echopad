@@ -65,10 +65,15 @@ pub struct PushResult {
 }
 
 /// Sync engine configuration
+/// 
+/// The engine uses `vault_id` (remote vault identifier) for all state operations.
+/// The `vault_path` is the local filesystem path used for reading/writing files.
 pub struct SyncEngine {
     pub server_url: String,
     pub access_token: String,
+    /// Remote vault ID - used as primary key for state operations
     pub vault_id: String,
+    /// Local filesystem path - used for file operations
     pub vault_path: String,
     pub state_manager: Option<std::sync::Arc<SyncStateManager>>,
     /// When true, pull operations will not overwrite existing local files
@@ -186,7 +191,8 @@ impl SyncEngine {
     fn get_local_changes(&self, scan_result: &ScanResult) -> ChangeSet {
         // If we have a state manager, use it for incremental sync
         if let Some(ref state_manager) = self.state_manager {
-            let file_states = state_manager.get_all_file_states(&self.vault_path);
+            // Use vault_id for state lookups (not vault_path)
+            let file_states = state_manager.get_all_file_states_by_id(&self.vault_id);
             
             // Build previous state map from stored file states
             let previous: HashMap<String, String> = file_states
@@ -282,9 +288,9 @@ impl SyncEngine {
                 if local_path.exists() {
                     fs::remove_file(&local_path).map_err(SyncError::Io)?;
                 }
-                // Remove from local state
+                // Remove from local state (use vault_id for state operations)
                 if let Some(ref state_manager) = self.state_manager {
-                    state_manager.remove_file_state(&self.vault_path, &relative_path);
+                    state_manager.remove_file_state_by_id(&self.vault_id, &relative_path);
                 }
             }
             "create" | "update" => {
@@ -296,8 +302,9 @@ impl SyncEngine {
                         // Read local file and compute hash to track state
                         if let Ok(local_content) = fs::read(&local_path) {
                             let local_hash = compute_hash(&local_content);
-                            state_manager.mark_synced(
-                                &self.vault_path,
+                            // Use vault_id for state operations
+                            state_manager.mark_synced_by_id(
+                                &self.vault_id,
                                 &relative_path,
                                 &local_hash,
                                 change.version as u32
@@ -335,10 +342,10 @@ impl SyncEngine {
                     // Write file
                     fs::write(&local_path, &content).map_err(SyncError::Io)?;
 
-                    // Update local state to mark as synced
+                    // Update local state to mark as synced (use vault_id)
                     if let Some(ref state_manager) = self.state_manager {
-                        state_manager.mark_synced(
-                            &self.vault_path, 
+                        state_manager.mark_synced_by_id(
+                            &self.vault_id, 
                             &relative_path, 
                             &hash, 
                             change.version as u32
@@ -393,9 +400,9 @@ impl SyncEngine {
         
         // Add changed files
         for info in &change_set.changed {
-            // Get base_version from state manager if available
+            // Get base_version from state manager if available (use vault_id)
             let base_version = self.state_manager.as_ref().and_then(|sm| {
-                sm.get_file_state(&self.vault_path, &info.relative_path)
+                sm.get_file_state_by_id(&self.vault_id, &info.relative_path)
                     .and_then(|fs| fs.remote_version)
             });
 
@@ -411,8 +418,9 @@ impl SyncEngine {
 
         // Add deleted files
         for path in &change_set.deleted {
+            // Use vault_id for state lookups
             let base_version = self.state_manager.as_ref().and_then(|sm| {
-                sm.get_file_state(&self.vault_path, path)
+                sm.get_file_state_by_id(&self.vault_id, path)
                     .and_then(|fs| fs.remote_version)
             });
 
@@ -489,10 +497,10 @@ impl SyncEngine {
                                 if let Some(ref file_id) = result.file_id {
                                     let _ = self.confirm_upload(file_id).await;
                                 }
-                                // Update local state to mark as synced
+                                // Update local state to mark as synced (use vault_id)
                                 if let Some(ref state_manager) = self.state_manager {
                                     let version = result.new_version.unwrap_or(1) as u32;
-                                    state_manager.mark_synced(&self.vault_path, &path, &content_hash, version);
+                                    state_manager.mark_synced_by_id(&self.vault_id, &path, &content_hash, version);
                                 }
                             }
                             Err(e) => {
@@ -503,9 +511,9 @@ impl SyncEngine {
                 } else {
                     // This is a delete operation (no upload needed)
                     deleted += 1;
-                    // Remove from local state
+                    // Remove from local state (use vault_id)
                     if let Some(ref state_manager) = self.state_manager {
-                        state_manager.remove_file_state(&self.vault_path, &path);
+                        state_manager.remove_file_state_by_id(&self.vault_id, &path);
                     }
                 }
             }

@@ -23,10 +23,9 @@ fn write_sync_manifest(vault_path: &str, manifest: &VaultSyncManifest) -> Result
     fs::write(&manifest_path, json)
         .map_err(|e| format!("Failed to write manifest: {}", e))?;
     
-    // On Windows, set the hidden attribute
+    // On Windows, set the hidden attribute using attrib command
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::fs::OpenOptionsExt;
         use std::process::Command;
         let _ = Command::new("attrib")
             .args(["+H", manifest_path.to_str().unwrap_or_default()])
@@ -384,8 +383,8 @@ pub async fn sync_now(
         return Err("Sync not enabled for this vault".to_string());
     }
 
-    let vault_id = vault_state.vault_id
-        .ok_or("Vault not registered with server")?;
+    // vault_id is now always present (it's the primary key in VaultState)
+    let vault_id = vault_state.vault_id;
 
     let server_url = state.auth.get_server_url()
         .ok_or("Not logged in")?;
@@ -579,10 +578,17 @@ pub struct VaultConnectionInfo {
     pub is_same_user: bool,
     /// Whether sync is already enabled for this vault in memory
     pub is_already_enabled: bool,
+    /// If the vault was previously at a different path (moved), this contains the old path
+    pub previous_path: Option<String>,
+    /// Whether this vault has existing file sync state (from this or previous path)
+    pub has_existing_state: bool,
 }
 
 /// Detect if a vault has a sync manifest (was previously connected)
-/// Returns connection info if a manifest exists, None otherwise
+/// Returns connection info if a manifest exists, None otherwise.
+/// 
+/// This also detects if the vault was moved from a different location,
+/// which is useful for preserving file sync state.
 #[tauri::command]
 pub async fn sync_detect_vault_connection(
     state: State<'_, SyncState>,
@@ -598,11 +604,21 @@ pub async fn sync_detect_vault_connection(
     let current_user_id = state.auth.get_user().map(|u| u.id);
     let is_same_user = current_user_id.as_ref() == Some(&manifest.user_id);
 
-    // Check if sync is already enabled in memory
-    let is_already_enabled = state.state_manager
-        .get_vault_state(&vault_path)
-        .map(|s| s.enabled)
-        .unwrap_or(false);
+    // Check if sync is already enabled at this path
+    let vault_at_path = state.state_manager.get_vault_state(&vault_path);
+    let is_already_enabled = vault_at_path.as_ref().map(|s| s.enabled).unwrap_or(false);
+
+    // Check if this vault_id exists at a different path (vault was moved)
+    let existing_vault = state.state_manager.get_vault_state_by_id(&manifest.remote_vault_id);
+    let previous_path = existing_vault
+        .as_ref()
+        .filter(|v| v.vault_path != vault_path)
+        .map(|v| v.vault_path.clone());
+
+    // Check if there's existing file sync state for this vault_id
+    let has_existing_state = !state.state_manager
+        .get_all_file_states_by_id(&manifest.remote_vault_id)
+        .is_empty();
 
     Ok(Some(VaultConnectionInfo {
         remote_vault_id: manifest.remote_vault_id,
@@ -610,11 +626,17 @@ pub async fn sync_detect_vault_connection(
         user_id: manifest.user_id,
         is_same_user,
         is_already_enabled,
+        previous_path,
+        has_existing_state,
     }))
 }
 
 /// Auto-reconnect a vault using its manifest
-/// This should be called after session restore if a manifest is detected
+/// This should be called after session restore if a manifest is detected.
+/// 
+/// This function handles the case where a vault folder was moved to a different
+/// location - it will update the path mapping in the state manager while preserving
+/// the existing file sync state.
 #[tauri::command]
 pub async fn sync_auto_reconnect_vault(
     state: State<'_, SyncState>,
@@ -639,17 +661,34 @@ pub async fn sync_auto_reconnect_vault(
         return Ok(false);
     }
 
-    // Check if already enabled
+    // Check if already connected at this path
     if let Some(vault_state) = state.state_manager.get_vault_state(&vault_path) {
-        if vault_state.enabled && vault_state.vault_id == Some(manifest.remote_vault_id.clone()) {
+        if vault_state.enabled && vault_state.vault_id == manifest.remote_vault_id {
             println!("[Sync] Vault already connected to {}", manifest.remote_vault_id);
             return Ok(true);
         }
     }
 
-    // Re-enable sync for this vault
-    println!("[Sync] Auto-reconnecting vault {} to remote {}", vault_path, manifest.remote_vault_id);
-    state.state_manager.enable_vault(&vault_path, &manifest.remote_vault_id);
+    // Check if this vault_id is already known but at a different path (vault was moved)
+    if let Some(existing_state) = state.state_manager.get_vault_state_by_id(&manifest.remote_vault_id) {
+        if existing_state.vault_path != vault_path {
+            println!(
+                "[Sync] Vault {} was moved from {} to {}, updating path mapping",
+                manifest.remote_vault_id, existing_state.vault_path, vault_path
+            );
+            // Update the path mapping - this preserves the file sync state
+            state.state_manager.update_vault_path(&manifest.remote_vault_id, &vault_path);
+        }
+        
+        // Ensure it's enabled
+        if !existing_state.enabled {
+            state.state_manager.enable_vault(&vault_path, &manifest.remote_vault_id);
+        }
+    } else {
+        // First time connecting this vault on this device
+        println!("[Sync] Auto-reconnecting vault {} to remote {}", vault_path, manifest.remote_vault_id);
+        state.state_manager.enable_vault(&vault_path, &manifest.remote_vault_id);
+    }
 
     // Update manifest with current server URL if it changed
     let current_server_url = state.auth.get_server_url().ok_or("No server URL")?;
