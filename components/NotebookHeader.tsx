@@ -18,7 +18,7 @@ export function NotebookHeader({
   const pathParts = notebookPath?.split('/').filter(Boolean) || []
 
   return (
-    <div className="h-14 border-b border-border/40 flex items-center px-4 justify-between bg-glass backdrop-blur-md z-20 absolute top-0 left-0 right-0">
+    <div className="h-16 border-b border-border/40 flex items-center px-4 justify-between bg-glass backdrop-blur-md z-20 absolute top-0 left-0 right-0">
       <div className="flex items-center gap-3 overflow-hidden min-w-0 flex-1">
         <button
           onClick={onToggleSidebar}

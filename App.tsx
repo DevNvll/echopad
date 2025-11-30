@@ -289,7 +289,7 @@ function App() {
                     }
                   />
 
-                  <div className="flex-1 flex flex-row min-h-0 pt-14 relative bg-[#050505]">
+                  <div className="flex-1 flex flex-row min-h-0 pt-16 relative bg-[#050505]">
                     <div className="flex-1 flex flex-col min-w-0 z-0">
                       <MessageList />
                       <InputArea />
