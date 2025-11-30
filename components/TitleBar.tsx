@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, Square, X, Copy, Search } from 'lucide-react'
+import { Minus, Square, X, Copy, Search, RefreshCw, Cloud, CloudOff, AlertCircle, CheckCircle } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useSyncStore } from '@/stores/syncStore'
+import { useVaultStore } from '@/stores/vaultStore'
 
 interface TitleBarProps {
   onOpenCommandPalette?: () => void
@@ -9,8 +11,12 @@ interface TitleBarProps {
 
 export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false)
+  const [isSyncingManual, setIsSyncingManual] = useState(false)
   const { settings } = useTheme()
   const appWindow = getCurrentWindow()
+  
+  const { isLoggedIn, vaultStatuses, syncNow } = useSyncStore()
+  const { vaultPath } = useVaultStore()
 
   useEffect(() => {
     const checkMaximized = async () => {
@@ -32,6 +38,44 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   const handleMinimize = () => appWindow.minimize()
   const handleMaximize = () => appWindow.toggleMaximize()
   const handleClose = () => appWindow.close()
+
+  // Sync status for current vault
+  const currentVaultStatus = vaultStatuses.find((v) => v.vault_path === vaultPath)
+  const isSyncEnabled = isLoggedIn && currentVaultStatus?.enabled
+  const isSyncing = currentVaultStatus?.status === 'syncing' || isSyncingManual
+  const hasError = currentVaultStatus?.status === 'error'
+  const pendingChanges = currentVaultStatus?.pending_changes ?? 0
+
+  const handleSyncNow = async () => {
+    if (!vaultPath || !isSyncEnabled || isSyncing) return
+    
+    setIsSyncingManual(true)
+    try {
+      await syncNow(vaultPath)
+    } catch (error) {
+      console.error('Sync failed:', error)
+    } finally {
+      setIsSyncingManual(false)
+    }
+  }
+
+  const getSyncIcon = () => {
+    if (!isLoggedIn) return <CloudOff size={14} className="text-textMuted/50" />
+    if (!isSyncEnabled) return <CloudOff size={14} className="text-textMuted/50" />
+    if (isSyncing) return <RefreshCw size={14} className="animate-spin text-accent" />
+    if (hasError) return <AlertCircle size={14} className="text-red-400" />
+    if (pendingChanges > 0) return <Cloud size={14} className="text-amber-400" />
+    return <CheckCircle size={14} className="text-green-400" />
+  }
+
+  const getSyncTooltip = () => {
+    if (!isLoggedIn) return 'Sync not enabled'
+    if (!isSyncEnabled) return 'Sync not enabled for this vault'
+    if (isSyncing) return 'Syncing...'
+    if (hasError) return 'Sync error - click to retry'
+    if (pendingChanges > 0) return `${pendingChanges} pending changes - click to sync`
+    return 'All synced - click to sync now'
+  }
 
   return (
     <div className="h-9 flex items-center justify-between bg-sidebar border-b border-border/40 select-none rounded-t-lg">
@@ -61,6 +105,25 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
       </div>
 
       <div className="flex items-center h-full shrink-0">
+        {/* Sync Now Button */}
+        <button
+          onClick={handleSyncNow}
+          disabled={!isSyncEnabled || isSyncing}
+          title={getSyncTooltip()}
+          className={`h-full w-10 flex items-center justify-center transition-colors ${
+            isSyncEnabled && !isSyncing
+              ? 'hover:bg-white/5 cursor-pointer'
+              : 'cursor-default opacity-60'
+          }`}
+        >
+          {getSyncIcon()}
+          {pendingChanges > 0 && isSyncEnabled && !isSyncing && (
+            <span className="absolute top-1.5 ml-4 w-2 h-2 bg-amber-400 rounded-full" />
+          )}
+        </button>
+
+        <div className="w-px h-4 bg-border/30 mx-1" />
+
         <button
           onClick={handleMinimize}
           className="h-full w-12 flex items-center justify-center text-textMuted hover:bg-white/5 transition-colors"
