@@ -314,43 +314,59 @@ impl SyncEngine {
                     return Ok(());
                 }
                 
-                // Check if we need to download
-                if let Some(download_url) = &change.download_url {
-                    // Build full download URL (server returns relative path)
-                    let full_download_url = if download_url.starts_with('/') {
-                        format!("{}{}", self.server_url, download_url)
-                    } else {
-                        download_url.clone()
-                    };
-
-                    // Download the file
-                    let content = self.download_file(&full_download_url).await?;
-
-                    // Verify hash
-                    let hash = compute_hash(&content);
-                    if hash != change.content_hash {
-                        return Err(SyncError::InvalidData(
-                            "Downloaded file hash mismatch".to_string(),
-                        ));
-                    }
-
-                    // Ensure parent directory exists
-                    if let Some(parent) = local_path.parent() {
-                        fs::create_dir_all(parent).map_err(SyncError::Io)?;
-                    }
-
-                    // Write file
-                    fs::write(&local_path, &content).map_err(SyncError::Io)?;
-
-                    // Update local state to mark as synced (use vault_id)
-                    if let Some(ref state_manager) = self.state_manager {
-                        state_manager.mark_synced_by_id(
-                            &self.vault_id, 
-                            &relative_path, 
-                            &hash, 
-                            change.version as u32
+                // Check if we have a download URL
+                let download_url = match &change.download_url {
+                    Some(url) => url,
+                    None => {
+                        // File exists in remote database but content is not available
+                        // This can happen if push was interrupted after creating the record
+                        // but before uploading the file content
+                        eprintln!(
+                            "[Sync] Warning: No download URL for file '{}' (id: {}). \
+                            File may not have been fully uploaded to the server.",
+                            relative_path, change.id
                         );
+                        return Err(SyncError::InvalidData(format!(
+                            "File '{}' has no download URL - content not available on server",
+                            relative_path
+                        )));
                     }
+                };
+
+                // Build full download URL (server returns relative path)
+                let full_download_url = if download_url.starts_with('/') {
+                    format!("{}{}", self.server_url, download_url)
+                } else {
+                    download_url.clone()
+                };
+
+                // Download the file
+                let content = self.download_file(&full_download_url).await?;
+
+                // Verify hash
+                let hash = compute_hash(&content);
+                if hash != change.content_hash {
+                    return Err(SyncError::InvalidData(
+                        "Downloaded file hash mismatch".to_string(),
+                    ));
+                }
+
+                // Ensure parent directory exists
+                if let Some(parent) = local_path.parent() {
+                    fs::create_dir_all(parent).map_err(SyncError::Io)?;
+                }
+
+                // Write file
+                fs::write(&local_path, &content).map_err(SyncError::Io)?;
+
+                // Update local state to mark as synced (use vault_id)
+                if let Some(ref state_manager) = self.state_manager {
+                    state_manager.mark_synced_by_id(
+                        &self.vault_id, 
+                        &relative_path, 
+                        &hash, 
+                        change.version as u32
+                    );
                 }
             }
             _ => {

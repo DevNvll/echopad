@@ -132,18 +132,24 @@ export async function pull(
   const hasMore = results.length > effectiveLimit;
   const pageFiles = hasMore ? results.slice(0, effectiveLimit) : results;
 
-  // Generate presigned URLs for downloads
-  const changes: RemoteChange[] = await Promise.all(
+  // Generate presigned URLs for downloads and filter out incomplete files
+  const changesWithStatus = await Promise.all(
     pageFiles.map(async (file) => {
       let downloadUrl: string | null = null;
+      let hasContent = true;
       
       if (!file.deleted_at) {
-        // Generate presigned URL for download
-        // Note: R2 presigned URLs are generated differently in Workers
+        // Check if file content exists in R2 storage
         const object = await env.STORAGE.head(file.storage_key);
         if (object) {
-          // For R2, we'll use a custom download endpoint instead of presigned URLs
+          // For R2, we use a custom download endpoint instead of presigned URLs
           downloadUrl = `/api/v1/vaults/${vaultId}/files/${file.id}/download`;
+        } else {
+          // File record exists but content is missing from R2
+          // This can happen if push was interrupted after creating the DB record
+          // but before the file was uploaded
+          console.warn(`[Sync] File ${file.id} (${file.encrypted_path}) has no content in R2 storage - skipping`);
+          hasContent = false;
         }
       }
 
@@ -151,17 +157,26 @@ export async function pull(
         (cursor ? 'update' : 'create');
 
       return {
-        id: file.id,
-        encrypted_path: file.encrypted_path,
-        operation,
-        content_hash: file.content_hash,
-        size: file.size_bytes,
-        modified_at: file.modified_at,
-        version: file.version,
-        download_url: downloadUrl,
+        change: {
+          id: file.id,
+          encrypted_path: file.encrypted_path,
+          operation,
+          content_hash: file.content_hash,
+          size: file.size_bytes,
+          modified_at: file.modified_at,
+          version: file.version,
+          download_url: downloadUrl,
+        },
+        hasContent,
+        isDeleted: !!file.deleted_at,
       };
     })
   );
+
+  // Filter out files that don't have content (but include deleted files)
+  const changes: RemoteChange[] = changesWithStatus
+    .filter(item => item.hasContent || item.isDeleted)
+    .map(item => item.change);
 
   // Generate next cursor
   const lastFile = pageFiles[pageFiles.length - 1];
