@@ -1,6 +1,59 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, memo } from 'react'
 import { clsx } from 'clsx'
+import { Light as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs'
+// Only import languages you need for better performance
+import javascript from 'react-syntax-highlighter/dist/esm/languages/hljs/javascript'
+import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript'
+import python from 'react-syntax-highlighter/dist/esm/languages/hljs/python'
+import rust from 'react-syntax-highlighter/dist/esm/languages/hljs/rust'
+import css from 'react-syntax-highlighter/dist/esm/languages/hljs/css'
+import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json'
+import bash from 'react-syntax-highlighter/dist/esm/languages/hljs/bash'
+import sql from 'react-syntax-highlighter/dist/esm/languages/hljs/sql'
+import xml from 'react-syntax-highlighter/dist/esm/languages/hljs/xml'
 import { NoteImage } from '../NoteImage'
+
+// Register languages
+SyntaxHighlighter.registerLanguage('javascript', javascript)
+SyntaxHighlighter.registerLanguage('js', javascript)
+SyntaxHighlighter.registerLanguage('typescript', typescript)
+SyntaxHighlighter.registerLanguage('ts', typescript)
+SyntaxHighlighter.registerLanguage('python', python)
+SyntaxHighlighter.registerLanguage('py', python)
+SyntaxHighlighter.registerLanguage('rust', rust)
+SyntaxHighlighter.registerLanguage('rs', rust)
+SyntaxHighlighter.registerLanguage('css', css)
+SyntaxHighlighter.registerLanguage('json', json)
+SyntaxHighlighter.registerLanguage('bash', bash)
+SyntaxHighlighter.registerLanguage('sh', bash)
+SyntaxHighlighter.registerLanguage('shell', bash)
+SyntaxHighlighter.registerLanguage('sql', sql)
+SyntaxHighlighter.registerLanguage('xml', xml)
+SyntaxHighlighter.registerLanguage('html', xml)
+
+// Memoized code block component
+const CodeBlock = memo(({ language, children }: { language: string; children: string }) => (
+  <SyntaxHighlighter
+    style={atomOneDark}
+    language={language}
+    PreTag="div"
+    customStyle={{
+      margin: 0,
+      padding: '1rem',
+      background: 'rgba(0, 0, 0, 0.4)',
+      borderRadius: '0.5rem',
+      fontSize: '0.875rem',
+    }}
+    codeTagProps={{
+      style: {
+        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+      }
+    }}
+  >
+    {children}
+  </SyntaxHighlighter>
+))
 
 export function useMarkdownComponents(vaultPath: string | null) {
   return useMemo(
@@ -35,21 +88,44 @@ export function useMarkdownComponents(vaultPath: string | null) {
           className="border-l-[3px] border-brand/40 pl-4 py-1 my-2 text-textMuted italic bg-surfaceHighlight/5 rounded-r"
         />
       ),
-      code: ({ node, className, ...props }: any) => (
-        <code
-          {...props}
-          className={clsx(
-            'bg-surfaceHighlight border border-border/50 rounded px-1.5 py-px text-[85%] font-mono text-accent',
-            className
-          )}
-        />
-      ),
-      pre: ({ node, ...props }: any) => (
-        <pre
-          {...props}
-          className="bg-black/40 border border-border/50 rounded-lg p-4 my-3 overflow-x-auto text-sm font-mono text-textMuted/90 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-        />
-      ),
+      code: ({ node, className, children, ...props }: any) => {
+        const match = /language-(\w+)/.exec(className || '')
+        
+        if (match) {
+          return (
+            <CodeBlock language={match[1]}>
+              {String(children).replace(/\n$/, '')}
+            </CodeBlock>
+          )
+        }
+        
+        return (
+          <code
+            {...props}
+            className={clsx(
+              'bg-surfaceHighlight border border-border/50 rounded px-1.5 py-px text-[85%] font-mono text-accent',
+              className
+            )}
+          >
+            {children}
+          </code>
+        )
+      },
+      pre: ({ node, children, ...props }: any) => {
+        // If the child is already a SyntaxHighlighter (code block with language), just render children
+        const child = React.Children.toArray(children)[0]
+        if (React.isValidElement(child) && child.type === 'div') {
+          return <>{children}</>
+        }
+        return (
+          <pre
+            {...props}
+            className="bg-black/40 border border-border/50 rounded-lg p-4 my-3 overflow-x-auto text-sm font-mono text-textMuted/90 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+          >
+            {children}
+          </pre>
+        )
+      },
       ul: ({ node, ...props }: any) => (
         <ul
           {...props}
