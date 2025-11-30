@@ -1,5 +1,13 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Settings, Palette, Info, X, HardDrive, Wrench } from 'lucide-react'
+import {
+  Settings,
+  Palette,
+  Info,
+  X,
+  HardDrive,
+  Wrench,
+  Cloud
+} from 'lucide-react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -19,6 +27,7 @@ import {
   AboutSettings,
   AdvancedSettings
 } from './settings'
+import { SyncSettings } from './sync/SyncSettings'
 import { useVaultStore, useUIStore } from '../stores'
 import {
   useKnownVaults,
@@ -32,6 +41,7 @@ export type SettingsSection =
   | 'general'
   | 'storage'
   | 'appearance'
+  | 'sync'
   | 'advanced'
   | 'about'
 
@@ -43,6 +53,7 @@ const NAV_ITEMS: {
   { id: 'general', label: 'General', icon: <Settings size={16} /> },
   { id: 'storage', label: 'Storage', icon: <HardDrive size={16} /> },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
+  { id: 'sync', label: 'Sync', icon: <Cloud size={16} /> },
   { id: 'advanced', label: 'Advanced', icon: <Wrench size={16} /> },
   { id: 'about', label: 'About', icon: <Info size={16} /> }
 ]
@@ -200,6 +211,7 @@ export function SettingsModal() {
                 vaultName={vaultName}
               />
             )}
+            {activeSection === 'sync' && <SyncSettings />}
             {activeSection === 'advanced' && <AdvancedSettings />}
             {activeSection === 'about' && (
               <AboutSettings appName={settings.appName} />

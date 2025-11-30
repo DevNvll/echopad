@@ -29,6 +29,23 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-global-shortcut = "2"
 base64 = "0.22"
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 scraper = "0.21"
 url = "2"
+
+# Sync & Crypto dependencies
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+blake3 = "1.5"
+rand = "0.8"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+notify = "6"
+parking_lot = "0.12"
+thiserror = "1"
+async-trait = "0.1"
+urlencoding = "2"
+hostname = "0.4"

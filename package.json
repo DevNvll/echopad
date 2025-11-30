@@ -14,7 +14,9 @@
     "worker:update-proxy:deploy": "wrangler deploy --config workers/update-proxy/wrangler.toml",
     "worker:metadata-fetcher:dev": "wrangler dev --config workers/metadata-fetcher/wrangler.toml",
     "worker:metadata-fetcher:deploy": "wrangler deploy --config workers/metadata-fetcher/wrangler.toml",
-    "workers:deploy": "pnpm worker:update-proxy:deploy && pnpm worker:metadata-fetcher:deploy"
+    "worker:sync-api:dev": "wrangler dev --config workers/sync-api/wrangler.toml",
+    "worker:sync-api:deploy": "wrangler deploy --config workers/sync-api/wrangler.toml",
+    "workers:deploy": "pnpm worker:update-proxy:deploy && pnpm worker:metadata-fetcher:deploy && pnpm worker:sync-api:deploy"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

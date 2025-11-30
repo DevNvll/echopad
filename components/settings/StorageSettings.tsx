@@ -1,10 +1,14 @@
-import { Plus, Trash2, Check } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Trash2, Check, Cloud, Download, Loader2 } from 'lucide-react'
+import { open } from '@tauri-apps/plugin-dialog'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import { KnownVault } from '@/api'
+import { KnownVault, addKnownVault } from '@/api'
 import { getIconByName } from '@/components/IconPicker'
+import { useSyncStore } from '@/stores/syncStore'
+import type { VaultInfo } from '@/types/sync'
 
 interface StorageSettingsProps {
   vaultPath: string | null
@@ -23,6 +27,66 @@ export function StorageSettings({
   onSwitchVault,
   onRemoveVault
 }: StorageSettingsProps) {
+  const [showRemoteVaults, setShowRemoteVaults] = useState(false)
+  const [remoteVaults, setRemoteVaults] = useState<VaultInfo[]>([])
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false)
+  const [connectingVaultId, setConnectingVaultId] = useState<string | null>(
+    null
+  )
+
+  const { isLoggedIn, listRemoteVaults, connectVault, refreshStatus } =
+    useSyncStore()
+
+  const loadRemoteVaults = async () => {
+    setIsLoadingRemote(true)
+    try {
+      const vaults = await listRemoteVaults()
+      setRemoteVaults(vaults)
+    } catch (error) {
+      console.error('Failed to load remote vaults:', error)
+    } finally {
+      setIsLoadingRemote(false)
+    }
+  }
+
+  const handleShowRemoteVaults = () => {
+    setShowRemoteVaults(true)
+    loadRemoteVaults()
+  }
+
+  const handleConnectVault = async (vault: VaultInfo) => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: `Select folder for "${vault.name}"`
+    })
+
+    if (selected && typeof selected === 'string') {
+      setConnectingVaultId(vault.id)
+      try {
+        await connectVault(selected, vault.id)
+        await refreshStatus()
+        // Add to known vaults before switching
+        await addKnownVault(selected)
+        setShowRemoteVaults(false)
+        // Switch to the new vault
+        onSwitchVault(selected)
+      } catch (error) {
+        console.error('Failed to connect vault:', error)
+      } finally {
+        setConnectingVaultId(null)
+      }
+    }
+  }
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -36,12 +100,93 @@ export function StorageSettings({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <Label className="text-sm text-textMain">Your Vaults</Label>
-          <Button size="sm" onClick={onAddVault}>
-            <Plus size={14} />
-            Add Vault
-          </Button>
+          <div className="flex items-center gap-2">
+            {isLoggedIn && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleShowRemoteVaults}
+                disabled={showRemoteVaults}
+              >
+                <Cloud size={14} />
+                Connect Remote
+              </Button>
+            )}
+            <Button size="sm" onClick={onAddVault}>
+              <Plus size={14} />
+              Add Local
+            </Button>
+          </div>
         </div>
 
+        {/* Remote Vaults Panel */}
+        {showRemoteVaults && (
+          <div className="p-4 rounded-lg border border-brand/30 bg-brand/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Cloud size={16} className="text-brand" />
+                <span className="text-sm font-medium text-textMain">
+                  Remote Vaults
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowRemoteVaults(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+            </div>
+
+            {isLoadingRemote ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-brand" />
+              </div>
+            ) : remoteVaults.length === 0 ? (
+              <p className="text-sm text-textMuted text-center py-4">
+                No remote vaults found. Create one from the Sync settings.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {remoteVaults.map((vault) => (
+                  <button
+                    key={vault.id}
+                    onClick={() => handleConnectVault(vault)}
+                    disabled={connectingVaultId !== null}
+                    className="w-full p-3 rounded-lg border border-border hover:border-brand/50 hover:bg-brand/5 transition-colors text-left group disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-surfaceHighlight group-hover:bg-brand/10 transition-colors">
+                        <Download
+                          size={16}
+                          className="text-textMuted group-hover:text-brand transition-colors"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-textMain truncate">
+                          {vault.name}
+                        </p>
+                        <p className="text-xs text-textMuted">
+                          {vault.file_count} files •{' '}
+                          {formatBytes(vault.total_size_bytes)}
+                        </p>
+                      </div>
+                      {connectingVaultId === vault.id && (
+                        <Loader2 className="w-4 h-4 animate-spin text-brand" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-textMuted">
+              Select a remote vault to sync to a local folder on this device.
+            </p>
+          </div>
+        )}
+
+        {/* Local Vaults List */}
         <div className="space-y-2">
           {knownVaults.length === 0 ? (
             <div className="p-4 text-center text-sm text-textMuted border border-dashed border-border rounded-lg">
@@ -100,7 +245,7 @@ function VaultItem({
         className={cn(
           'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
           isActive
-            ? 'bg-gradient-to-br from-brand/30 to-brand/10 border border-brand/30'
+            ? 'bg-linear-to-br from-brand/30 to-brand/10 border border-brand/30'
             : 'bg-surfaceHighlight border border-border'
         )}
       >

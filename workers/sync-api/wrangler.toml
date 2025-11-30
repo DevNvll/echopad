@@ -1,0 +1,34 @@
+name = "echopad-sync-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain
+routes = [
+  { pattern = "sync.echopad.0x48.dev", custom_domain = true }
+]
+
+[vars]
+ENVIRONMENT = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "echopad-sync"
+database_id = "086a1090-70bc-4e0c-a363-bc654f2801c3"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "echopad-sync-storage"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "echopad-sync-prod"
+database_id = "9671d1de-89ae-441a-80dd-e6e5262f7d2b"
+
+[[env.production.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "echopad-sync-storage-prod"
+

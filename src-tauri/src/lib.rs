@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+mod sync;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Notebook {
     pub name: String,
@@ -429,6 +431,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
+            // Initialize sync state
+            let app_data_dir = app.path().app_data_dir()
+                .expect("Failed to get app data dir");
+            let db_path = app_data_dir.join("echopad.db");
+            let sync_state = sync::SyncState::new(db_path);
+            app.manage(sync_state);
+
+            // Set up global shortcut
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
             let app_handle = app.handle().clone();
             
@@ -453,6 +463,22 @@ pub fn run() {
             save_image,
             hide_quick_capture,
             fetch_og_metadata,
+            // Sync commands
+            sync::commands::sync_login,
+            sync::commands::sync_register,
+            sync::commands::sync_logout,
+            sync::commands::sync_get_status,
+            sync::commands::sync_enable_vault,
+            sync::commands::sync_disable_vault,
+            sync::commands::sync_now,
+            sync::commands::sync_get_conflicts,
+            sync::commands::sync_resolve_conflict,
+            sync::commands::sync_get_devices,
+            sync::commands::sync_revoke_device,
+            sync::commands::sync_get_user,
+            sync::commands::sync_is_logged_in,
+            sync::commands::sync_list_remote_vaults,
+            sync::commands::sync_connect_vault,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

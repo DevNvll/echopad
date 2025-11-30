@@ -1,0 +1,303 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { invoke } from '@tauri-apps/api/core'
+import type {
+  SyncStatus,
+  UserInfo,
+  AuthResponse,
+  VaultSyncStatus,
+  ConflictInfo,
+  DeviceInfo,
+  SyncOperationResult,
+  ConflictResolution,
+  VaultInfo,
+} from '../types/sync'
+
+const STORAGE_KEY = 'echopad-sync-auth'
+
+interface StoredAuth {
+  user: UserInfo | null
+  serverUrl: string | null
+}
+
+interface SyncState {
+  // Auth state
+  isLoggedIn: boolean
+  user: UserInfo | null
+  serverUrl: string | null
+  isLoading: boolean
+  error: string | null
+
+  // Vault sync state
+  vaultStatuses: VaultSyncStatus[]
+  
+  // UI state
+  showLoginModal: boolean
+  
+  // Actions
+  login: (email: string, password: string, serverUrl: string) => Promise<void>
+  logout: () => Promise<void>
+  refreshStatus: () => Promise<void>
+  enableVaultSync: (vaultPath: string, vaultName: string) => Promise<string>
+  disableVaultSync: (vaultPath: string) => Promise<void>
+  syncNow: (vaultPath: string) => Promise<SyncOperationResult>
+  getConflicts: (vaultPath: string) => Promise<ConflictInfo[]>
+  resolveConflict: (vaultPath: string, conflictPath: string, keep: ConflictResolution) => Promise<void>
+  getDevices: () => Promise<DeviceInfo[]>
+  revokeDevice: (deviceId: string) => Promise<void>
+  setShowLoginModal: (show: boolean) => void
+  clearError: () => void
+  initializeFromStorage: () => void
+  updateLastSyncTime: (vaultPath: string) => void
+  listRemoteVaults: () => Promise<VaultInfo[]>
+  connectVault: (vaultPath: string, remoteVaultId: string) => Promise<void>
+}
+
+// Helper to save auth to localStorage
+function saveAuthToStorage(user: UserInfo | null, serverUrl: string | null) {
+  try {
+    if (user && serverUrl) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, serverUrl }))
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  } catch (e) {
+    console.error('Failed to save auth to storage:', e)
+  }
+}
+
+// Helper to load auth from localStorage
+function loadAuthFromStorage(): StoredAuth | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (e) {
+    console.error('Failed to load auth from storage:', e)
+  }
+  return null
+}
+
+export const useSyncStore = create<SyncState>((set, get) => ({
+  // Initial state
+  isLoggedIn: false,
+  user: null,
+  serverUrl: null,
+  isLoading: false,
+  error: null,
+  vaultStatuses: [],
+  showLoginModal: false,
+
+  // Initialize from stored auth
+  initializeFromStorage: () => {
+    const stored = loadAuthFromStorage()
+    if (stored?.user && stored?.serverUrl) {
+      set({
+        isLoggedIn: true,
+        user: stored.user,
+        serverUrl: stored.serverUrl,
+      })
+      // Refresh status in background
+      get().refreshStatus()
+    }
+  },
+
+  // Actions
+  login: async (email: string, password: string, serverUrl: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      const response = await invoke<AuthResponse>('sync_login', {
+        email,
+        password,
+        serverUrl,
+      })
+      
+      // Save auth to storage
+      saveAuthToStorage(response.user, serverUrl)
+      
+      set({
+        isLoggedIn: true,
+        user: response.user,
+        serverUrl,
+        isLoading: false,
+        showLoginModal: false,
+      })
+      // Refresh vault statuses
+      await get().refreshStatus()
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  },
+
+  logout: async () => {
+    set({ isLoading: true })
+    try {
+      await invoke('sync_logout')
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      // Clear storage
+      saveAuthToStorage(null, null)
+      set({
+        isLoggedIn: false,
+        user: null,
+        serverUrl: null,
+        vaultStatuses: [],
+        isLoading: false,
+      })
+    }
+  },
+
+  refreshStatus: async () => {
+    try {
+      const status = await invoke<SyncStatus>('sync_get_status')
+      set({
+        isLoggedIn: status.is_logged_in,
+        user: status.user ?? get().user,
+        vaultStatuses: status.vaults,
+        error: status.last_error,
+      })
+    } catch (error) {
+      console.error('Failed to refresh sync status:', error)
+    }
+  },
+
+  enableVaultSync: async (vaultPath: string, vaultName: string) => {
+    set({ isLoading: true })
+    try {
+      const vaultId = await invoke<string>('sync_enable_vault', {
+        vaultPath,
+        vaultName,
+      })
+      await get().refreshStatus()
+      set({ isLoading: false })
+      return vaultId
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  },
+
+  disableVaultSync: async (vaultPath: string) => {
+    try {
+      await invoke('sync_disable_vault', { vaultPath })
+      await get().refreshStatus()
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  },
+
+  syncNow: async (vaultPath: string) => {
+    try {
+      const result = await invoke<SyncOperationResult>('sync_now', { vaultPath })
+      
+      // Update last sync time locally
+      get().updateLastSyncTime(vaultPath)
+      
+      await get().refreshStatus()
+      return result
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  },
+
+  updateLastSyncTime: (vaultPath: string) => {
+    const vaultStatuses = get().vaultStatuses.map(v => {
+      if (v.vault_path === vaultPath) {
+        return { ...v, last_sync_at: Date.now() }
+      }
+      return v
+    })
+    set({ vaultStatuses })
+  },
+
+  getConflicts: async (vaultPath: string) => {
+    try {
+      return await invoke<ConflictInfo[]>('sync_get_conflicts', { vaultPath })
+    } catch (error) {
+      console.error('Failed to get conflicts:', error)
+      return []
+    }
+  },
+
+  resolveConflict: async (vaultPath: string, conflictPath: string, keep: ConflictResolution) => {
+    try {
+      await invoke('sync_resolve_conflict', {
+        vaultPath,
+        conflictPath,
+        keep,
+      })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  },
+
+  getDevices: async () => {
+    try {
+      return await invoke<DeviceInfo[]>('sync_get_devices')
+    } catch (error) {
+      console.error('Failed to get devices:', error)
+      return []
+    }
+  },
+
+  revokeDevice: async (deviceId: string) => {
+    try {
+      await invoke('sync_revoke_device', { deviceId })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  },
+
+  setShowLoginModal: (show: boolean) => {
+    set({ showLoginModal: show })
+  },
+
+  clearError: () => {
+    set({ error: null })
+  },
+
+  listRemoteVaults: async () => {
+    try {
+      return await invoke<VaultInfo[]>('sync_list_remote_vaults')
+    } catch (error) {
+      console.error('Failed to list remote vaults:', error)
+      return []
+    }
+  },
+
+  connectVault: async (vaultPath: string, remoteVaultId: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      await invoke('sync_connect_vault', { vaultPath, remoteVaultId })
+      await get().refreshStatus()
+      set({ isLoading: false })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  },
+}))
