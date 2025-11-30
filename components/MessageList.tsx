@@ -5,14 +5,14 @@ import { formatMessageDate, shouldGroupMessages } from '../utils/formatting'
 import { LinkPreview } from './LinkPreview'
 import { NoteImage } from './NoteImage'
 import {
-  Search,
   Hash,
-  Edit2,
+  Pencil,
   Copy,
   Trash2,
   Check,
   ChevronDown,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -57,17 +57,6 @@ const EditTextarea: React.FC<{
 
   return (
     <div className="w-full animate-in fade-in duration-150">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
-          <Edit2 size={11} />
-          <span>Editing message</span>
-        </div>
-        {hasChanges && (
-          <span className="text-[10px] text-textMuted/60 italic">
-            (unsaved changes)
-          </span>
-        )}
-      </div>
       <textarea
         ref={textareaRef}
         value={content}
@@ -77,37 +66,36 @@ const EditTextarea: React.FC<{
           e.target.style.height = e.target.scrollHeight + 'px'
         }}
         onKeyDown={handleKeyDown}
-        className="w-full bg-black/40 border border-amber-500/20 rounded-lg p-3 text-[15px] text-textMain focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 resize-none overflow-hidden font-sans leading-relaxed transition-all shadow-inner"
+        className="w-full bg-black/30 border border-brand/20 rounded-lg p-3 text-[15px] text-textMain focus:outline-none focus:border-brand/40 resize-none overflow-hidden font-sans leading-relaxed transition-colors"
         rows={1}
       />
-      <div className="flex items-center justify-between mt-3">
-        <div className="flex items-center gap-3 text-[11px] text-textMuted/70">
+      <div className="flex items-center justify-between mt-2.5">
+        <div className="flex items-center gap-2.5 text-[10px] text-textMuted/50">
           <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] font-mono">
-              Esc
+            <kbd className="px-1 py-px bg-white/5 rounded text-[9px] font-mono">
+              esc
             </kbd>
-            <span className="ml-1">cancel</span>
+            <span>cancel</span>
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] font-mono">
-              Enter
+            <kbd className="px-1 py-px bg-white/5 rounded text-[9px] font-mono">
+              ↵
             </kbd>
-            <span className="ml-1">save</span>
+            <span>save</span>
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onCancel}
-            className="h-7 px-3 text-[12px] font-medium text-textMuted hover:text-textMain bg-white/5 hover:bg-white/10 rounded-md transition-all"
+            className="h-6 px-2 text-[11px] text-textMuted hover:text-textMain rounded transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={() => content.trim() && onSubmit(content)}
             disabled={!content.trim() || !hasChanges}
-            className="h-7 px-3 text-[12px] font-medium text-black bg-amber-500 hover:bg-amber-400 rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+            className="h-6 px-2.5 text-[11px] font-medium text-background bg-brand hover:bg-brand/90 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <Check size={12} />
             Save
           </button>
         </div>
@@ -378,9 +366,11 @@ export const MessageList: React.FC = React.memo(function MessageList() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-textMuted gap-2">
-        <div className="animate-spin w-5 h-5 border-2 border-brand border-t-transparent rounded-full"></div>
-        <div className="text-sm font-medium tracking-wide">SYNCING</div>
+      <div className="flex-1 flex flex-col items-center justify-center text-textMuted/50 gap-3">
+        <Loader2 size={18} className="animate-spin text-brand/60" />
+        <div className="text-[11px] font-medium tracking-widest uppercase">
+          Loading
+        </div>
       </div>
     )
   }
@@ -392,40 +382,18 @@ export const MessageList: React.FC = React.memo(function MessageList() {
 
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 pb-32 select-none">
-        <div className="flex flex-col items-center gap-6 max-w-md text-center">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-brand/20 via-brand/10 to-transparent border border-brand/20 flex items-center justify-center shadow-2xl shadow-brand/10">
-              <Hash className="text-brand/80" size={36} strokeWidth={2.5} />
-            </div>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-surface border border-brand/30 flex items-center justify-center">
-              <span className="text-sm">✨</span>
-            </div>
+        <div className="flex flex-col items-center gap-5 max-w-sm text-center">
+          <div className="w-12 h-12 rounded-xl bg-brand/10 border border-brand/10 flex items-center justify-center">
+            <Hash className="text-brand/70" size={22} strokeWidth={2} />
           </div>
 
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-textMain tracking-tight">
-              Welcome to <span className="text-brand">{notebookName}</span>
+          <div className="space-y-1.5">
+            <h3 className="text-base font-medium text-textMain">
+              {notebookName}
             </h3>
-            <p className="text-sm text-textMuted/70 leading-relaxed">
-              This notebook is ready for your thoughts, ideas, and notes.
-              <br />
-              Start typing below to create your first entry.
+            <p className="text-[13px] text-textMuted/60 leading-relaxed">
+              Start typing below to add your first note
             </p>
-          </div>
-
-          <div className="flex flex-col gap-2 mt-2 text-[12px] text-textMuted/50">
-            <div className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-mono text-[10px]">
-                Enter
-              </kbd>
-              <span>to save a note</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-mono text-[10px]">
-                #tag
-              </kbd>
-              <span>to organize with tags</span>
-            </div>
           </div>
         </div>
       </div>
@@ -436,17 +404,17 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     <div className="flex-1 relative flex flex-col min-h-0">
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto custom-scrollbar py-2 flex flex-col"
+        className="flex-1 overflow-y-auto custom-scrollbar py-4 flex flex-col"
         onScroll={handleScroll}
       >
         <div className="grow" />
-        <div className="w-full max-w-4xl mx-auto pb-28">
+        <div className="w-full max-w-3xl mx-auto pb-28 px-6">
           {/* Loading indicator for infinite scroll */}
           {isLoadingMore && (
-            <div className="flex justify-center py-4 mb-2">
-              <div className="flex items-center gap-2 px-4 py-2 text-[12px] font-medium text-textMuted">
-                <Loader2 size={14} className="animate-spin" />
-                <span>Loading older messages...</span>
+            <div className="flex justify-center py-3 mb-2">
+              <div className="flex items-center gap-2 text-[11px] text-textMuted/50">
+                <Loader2 size={12} className="animate-spin" />
+                <span>Loading more...</span>
               </div>
             </div>
           )}
@@ -460,175 +428,169 @@ export const MessageList: React.FC = React.memo(function MessageList() {
             const isEditing = editingMessageId === note.filename
 
             return (
-              <div
-                key={note.filename}
-                id={`message-${note.filename}`}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  handleContextMenu(e, note)
-                }}
-                className={clsx(
-                  'group relative transition-all duration-200',
-                  isEditing
-                    ? 'bg-amber-500/5 border-l-2 border-l-amber-500/60 pl-[78px] pr-8 py-4 mt-2 mb-2 rounded-r-lg'
-                    : 'hover:bg-surface pl-[80px] pr-8 pt-1.5 pb-1.5',
-                  !isEditing && (isGrouped ? 'mt-0' : 'mt-5')
-                )}
-              >
-                {!isEditing && (
-                  <div className="absolute left-0 top-0 w-[80px] flex justify-end pr-5 select-none">
-                    {!isGrouped ? (
-                      <span className="text-[11px] font-bold text-textMuted/60 uppercase tracking-wide mt-[7px]">
-                        {new Date(note.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
-                      </span>
-                    ) : (
-                      <span className="hidden group-hover:inline text-[10px] text-textMuted/30 font-mono mt-2 tabular-nums">
-                        {new Date(note.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
-                      </span>
-                    )}
+              <div key={note.filename}>
+                {/* Date separator */}
+                {!isGrouped && !isEditing && (
+                  <div className="flex items-center gap-3 pt-6 pb-2 first:pt-0">
+                    <div className="h-px flex-1 bg-border/30" />
+                    <span className="text-[10px] font-medium text-textMuted/40 uppercase tracking-wider">
+                      {dateLabel}
+                    </span>
+                    <div className="h-px flex-1 bg-border/30" />
                   </div>
                 )}
 
-                <div className="flex-1 min-w-0">
-                  {!isGrouped && !isEditing && (
-                    <div className="mb-1 flex items-baseline gap-2">
-                      <span className="text-[12px] font-bold text-brand/80 tracking-wide">
-                        {dateLabel}
-                      </span>
-                    </div>
+                <div
+                  id={`message-${note.filename}`}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    handleContextMenu(e, note)
+                  }}
+                  className={clsx(
+                    'group relative transition-colors duration-150',
+                    isEditing
+                      ? 'bg-brand/5 rounded-lg px-4 py-4 my-2'
+                      : 'hover:bg-white/2 rounded-lg px-4 py-2.5',
+                    isGrouped && !isEditing && 'mt-0'
                   )}
-                  {isEditing && (
-                    <div className="mb-2 text-[11px] text-textMuted/50">
-                      Created {dateLabel} at{' '}
-                      {new Date(note.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false
-                      })}
-                    </div>
-                  )}
-
-                  {isEditing ? (
-                    <EditTextarea
-                      initialContent={note.content}
-                      onSubmit={(content) =>
-                        handleEditSubmit(note.filename, content)
-                      }
-                      onCancel={() => setEditing(null)}
-                    />
-                  ) : (
-                    <div className="text-textMain/95 text-[15px] leading-relaxed markdown-content font-sans tracking-normal">
-                      <ReactMarkdown components={markdownComponents}>
-                        {note.content}
-                      </ReactMarkdown>
-
-                      {note.tags && note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2.5 opacity-80 hover:opacity-100 transition-opacity">
-                          {note.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleTagClick(tag)
-                              }}
-                              className="text-[11px] bg-brand/5 text-brand border border-brand/10 px-2 py-0.5 rounded hover:bg-brand/10 cursor-pointer transition-colors select-none font-medium"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {note.urls &&
-                        note.urls.map((url, i) => (
-                          <div key={i} onClick={(e) => e.stopPropagation()}>
-                            <LinkPreview url={url} />
-                          </div>
-                        ))}
-
-                      <div className="h-6 flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setEditing(note.filename)
-                          }}
-                          className="h-6 px-2 flex items-center gap-1.5 text-[11px] text-textMuted hover:text-textMain hover:bg-white/5 rounded transition-colors"
-                        >
-                          <Edit2 size={12} />
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCopy(note.content)
-                            setCopiedMessageId(note.filename)
-                            setTimeout(() => setCopiedMessageId(null), 1500)
-                          }}
+                >
+                  <div className="flex gap-3">
+                    {/* Time column */}
+                    {!isEditing && (
+                      <div className="w-10 shrink-0 pt-0.5">
+                        <span
                           className={clsx(
-                            'h-6 px-2 flex items-center gap-1.5 text-[11px] rounded transition-colors',
-                            copiedMessageId === note.filename
-                              ? 'text-green-400 bg-green-400/10'
-                              : 'text-textMuted hover:text-textMain hover:bg-white/5'
+                            'text-[10px] tabular-nums transition-opacity',
+                            isGrouped
+                              ? 'text-textMuted/20 opacity-0 group-hover:opacity-100'
+                              : 'text-textMuted/40'
                           )}
                         >
-                          {copiedMessageId === note.filename ? (
-                            <>
-                              <Check size={12} />
-                              <span>Copied!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={12} />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                        {deleteConfirmId === note.filename ? (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDelete(note.filename)
-                                setDeleteConfirmId(null)
-                              }}
-                              className="h-6 px-2 flex items-center gap-1.5 text-[11px] text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded transition-colors"
-                            >
-                              <Trash2 size={12} />
-                              <span>Confirm</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDeleteConfirmId(null)
-                              }}
-                              className="h-6 px-2 flex items-center text-[11px] text-textMuted hover:text-textMain hover:bg-white/5 rounded transition-colors"
-                            >
-                              <span>Cancel</span>
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteConfirmId(note.filename)
-                            }}
-                            className="h-6 px-2 flex items-center gap-1.5 text-[11px] text-red-400/70 hover:text-red-400 hover:bg-red-400/5 rounded transition-colors"
-                          >
-                            <Trash2 size={12} />
-                            <span>Delete</span>
-                          </button>
-                        )}
+                          {new Date(note.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
+                        </span>
                       </div>
+                    )}
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      {isEditing ? (
+                        <EditTextarea
+                          initialContent={note.content}
+                          onSubmit={(content) =>
+                            handleEditSubmit(note.filename, content)
+                          }
+                          onCancel={() => setEditing(null)}
+                        />
+                      ) : (
+                        <>
+                          <div className="text-textMain/90 text-[14px] leading-relaxed markdown-content">
+                            <ReactMarkdown components={markdownComponents}>
+                              {note.content}
+                            </ReactMarkdown>
+                          </div>
+
+                          {note.tags && note.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {note.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleTagClick(tag)
+                                  }}
+                                  className="text-[10px] text-brand/70 hover:text-brand cursor-pointer transition-colors select-none"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {note.urls &&
+                            note.urls.map((url, i) => (
+                              <div key={i} onClick={(e) => e.stopPropagation()}>
+                                <LinkPreview url={url} />
+                              </div>
+                            ))}
+
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-0.5 mt-1 -ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditing(note.filename)
+                              }}
+                              className="h-6 w-6 flex items-center justify-center text-textMuted/50 hover:text-textMain rounded transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCopy(note.content)
+                                setCopiedMessageId(note.filename)
+                                setTimeout(() => setCopiedMessageId(null), 1500)
+                              }}
+                              className={clsx(
+                                'h-6 w-6 flex items-center justify-center rounded transition-colors',
+                                copiedMessageId === note.filename
+                                  ? 'text-green-400'
+                                  : 'text-textMuted/50 hover:text-textMain'
+                              )}
+                              title="Copy"
+                            >
+                              {copiedMessageId === note.filename ? (
+                                <Check size={12} />
+                              ) : (
+                                <Copy size={12} />
+                              )}
+                            </button>
+                            {deleteConfirmId === note.filename ? (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDelete(note.filename)
+                                    setDeleteConfirmId(null)
+                                  }}
+                                  className="h-6 px-2 flex items-center gap-1 text-[10px] font-medium text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded transition-colors"
+                                >
+                                  <Trash2 size={10} />
+                                  <span>Delete</span>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDeleteConfirmId(null)
+                                  }}
+                                  className="h-6 w-6 flex items-center justify-center text-textMuted/50 hover:text-textMain rounded transition-colors"
+                                  title="Cancel"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleteConfirmId(note.filename)
+                                }}
+                                className="h-6 w-6 flex items-center justify-center text-textMuted/50 hover:text-red-400 rounded transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             )
@@ -641,10 +603,10 @@ export const MessageList: React.FC = React.memo(function MessageList() {
       {showScrollToBottom && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-32 right-6 z-10 flex items-center justify-center w-10 h-10 bg-surfaceHighlight/90 hover:bg-surfaceHighlight border border-border/60 rounded-full shadow-lg transition-all hover:scale-105"
+          className="absolute bottom-32 right-6 z-10 flex items-center justify-center w-8 h-8 bg-surface/90 backdrop-blur-sm border border-border/40 rounded-full shadow-lg transition-all hover:bg-surfaceHighlight"
           title="Scroll to bottom"
         >
-          <ChevronDown size={20} className="text-textMuted" />
+          <ChevronDown size={16} className="text-textMuted/70" />
         </button>
       )}
     </div>
