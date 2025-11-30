@@ -4,7 +4,16 @@ import { Note } from '../types'
 import { formatMessageDate, shouldGroupMessages } from '../utils/formatting'
 import { LinkPreview } from './LinkPreview'
 import { NoteImage } from './NoteImage'
-import { Search, Hash, Edit2, Copy, Trash2, Check } from 'lucide-react'
+import {
+  Search,
+  Hash,
+  Edit2,
+  Copy,
+  Trash2,
+  Check,
+  ChevronDown,
+  Loader2
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import {
   useVaultStore,
@@ -113,19 +122,23 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   const {
     notes,
     isLoading,
+    isLoadingMore,
+    hasMore,
     editingMessageId,
     targetMessageId,
     updateNote,
     deleteNote,
-    setEditing
+    setEditing,
+    loadMoreNotes
   } = useNotesStore()
   const { syncNoteTags, removeNoteTags } = useTagsStore()
   const { openCommand, openContextMenu, closeContextMenu } = useUIStore()
 
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const prevNotesLengthRef = useRef(notes.length)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const deleteConfirmIdRef = useRef(deleteConfirmId)
   deleteConfirmIdRef.current = deleteConfirmId
 
@@ -134,7 +147,46 @@ export const MessageList: React.FC = React.memo(function MessageList() {
       setDeleteConfirmId(null)
     }
     closeContextMenu()
-  }, [closeContextMenu])
+
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } =
+        scrollContainerRef.current
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+      setShowScrollToBottom(distanceFromBottom > 200)
+
+      // Infinite scroll: load more when near the top
+      if (
+        scrollTop < 100 &&
+        hasMore &&
+        !isLoadingMore &&
+        vaultPath &&
+        activeNotebook
+      ) {
+        const prevScrollHeight = scrollHeight
+        loadMoreNotes(vaultPath, activeNotebook).then(() => {
+          // Restore scroll position after loading
+          requestAnimationFrame(() => {
+            if (scrollContainerRef.current) {
+              const newScrollHeight = scrollContainerRef.current.scrollHeight
+              scrollContainerRef.current.scrollTop =
+                newScrollHeight - prevScrollHeight + scrollTop
+            }
+          })
+        })
+      }
+    }
+  }, [
+    closeContextMenu,
+    hasMore,
+    isLoadingMore,
+    vaultPath,
+    activeNotebook,
+    loadMoreNotes
+  ])
+
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+  }, [])
 
   const handleEditSubmit = useCallback(
     async (filename: string, newContent: string) => {
@@ -182,16 +234,35 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     [openContextMenu]
   )
 
-  useEffect(() => {
-    if (isLoading) return
+  // Track the last note to detect new notes (vs loading older ones)
+  const lastNoteRef = useRef<string | null>(null)
+  const hasInitialScrolled = useRef(false)
 
-    if (notes.length > prevNotesLengthRef.current) {
+  // Reset scroll tracking when notebook changes
+  useEffect(() => {
+    lastNoteRef.current = null
+    hasInitialScrolled.current = false
+  }, [activeNotebook])
+
+  useEffect(() => {
+    if (isLoading || notes.length === 0) return
+
+    const currentLastNote = notes[notes.length - 1]?.filename
+
+    // Scroll to bottom on initial load OR when a new note is added at the END
+    const isInitialLoad = !hasInitialScrolled.current
+    const isNewNoteAdded =
+      lastNoteRef.current !== null && currentLastNote !== lastNoteRef.current
+
+    if (isInitialLoad || isNewNoteAdded) {
+      hasInitialScrolled.current = true
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+        bottomRef.current?.scrollIntoView({ behavior: 'auto' })
       })
     }
-    prevNotesLengthRef.current = notes.length
-  }, [notes.length, isLoading])
+
+    lastNoteRef.current = currentLastNote
+  }, [notes, isLoading])
 
   useEffect(() => {
     if (isLoading) return
@@ -200,7 +271,7 @@ export const MessageList: React.FC = React.memo(function MessageList() {
       const timer = setTimeout(() => {
         const element = document.getElementById(`message-${targetMessageId}`)
         if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          element.scrollIntoView({ behavior: 'auto', block: 'center' })
           element.classList.add('bg-brand/10', 'ring-1', 'ring-brand/20')
           setTimeout(() => {
             element.classList.remove('bg-brand/10', 'ring-1', 'ring-brand/20')
@@ -364,11 +435,21 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   return (
     <div className="flex-1 relative flex flex-col min-h-0">
       <div
+        ref={scrollContainerRef}
         className="flex-1 overflow-y-auto custom-scrollbar py-2 flex flex-col"
         onScroll={handleScroll}
       >
         <div className="grow" />
         <div className="w-full max-w-4xl mx-auto pb-28">
+          {/* Loading indicator for infinite scroll */}
+          {isLoadingMore && (
+            <div className="flex justify-center py-4 mb-2">
+              <div className="flex items-center gap-2 px-4 py-2 text-[12px] font-medium text-textMuted">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading older messages...</span>
+              </div>
+            </div>
+          )}
           {notes.map((note, index) => {
             const prevNote = index > 0 ? notes[index - 1] : null
             const isGrouped = shouldGroupMessages(
@@ -555,6 +636,17 @@ export const MessageList: React.FC = React.memo(function MessageList() {
           <div ref={bottomRef} className="h-px" />
         </div>
       </div>
+
+      {/* Scroll to Bottom Button */}
+      {showScrollToBottom && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-32 right-6 z-10 flex items-center justify-center w-10 h-10 bg-surfaceHighlight/90 hover:bg-surfaceHighlight border border-border/60 rounded-full shadow-lg transition-all hover:scale-105"
+          title="Scroll to bottom"
+        >
+          <ChevronDown size={20} className="text-textMuted" />
+        </button>
+      )}
     </div>
   )
 })

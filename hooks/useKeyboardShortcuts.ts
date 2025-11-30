@@ -4,11 +4,13 @@ interface UseKeyboardShortcutsOptions {
   isCommandOpen: boolean
   isSettingsOpen: boolean
   isAnyModalOpen: boolean
+  hasActiveNotebook: boolean
   onToggleCommand: () => void
   onToggleSettings: () => void
   onOpenSettings: () => void
   onToggleSidebar: () => void
   onFocusInput: () => void
+  onRestoreAndFocusInput: () => void
   onCreateNotebook: () => void
   onCloseModals: () => void
 }
@@ -17,11 +19,13 @@ export function useKeyboardShortcuts({
   isCommandOpen,
   isSettingsOpen,
   isAnyModalOpen,
+  hasActiveNotebook,
   onToggleCommand,
   onToggleSettings,
   onOpenSettings,
   onToggleSidebar,
   onFocusInput,
+  onRestoreAndFocusInput,
   onCreateNotebook,
   onCloseModals
 }: UseKeyboardShortcutsOptions) {
@@ -39,10 +43,11 @@ export function useKeyboardShortcuts({
       // Ctrl/Cmd + , => Settings
       if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        if (!isSettingsOpen) {
+        if (isSettingsOpen) {
+          onToggleSettings()
+        } else {
           onOpenSettings()
         }
-        onToggleSettings()
         return
       }
 
@@ -64,10 +69,14 @@ export function useKeyboardShortcuts({
         return
       }
 
-      // Ctrl/Cmd + N => Focus input (new note)
+      // Ctrl/Cmd + N => Focus input (new note), restore last notebook if none active
       if (e.key === 'n' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault()
-        onFocusInput()
+        if (hasActiveNotebook) {
+          onFocusInput()
+        } else {
+          onRestoreAndFocusInput()
+        }
         return
       }
 
@@ -85,11 +94,13 @@ export function useKeyboardShortcuts({
     isCommandOpen,
     isSettingsOpen,
     isAnyModalOpen,
+    hasActiveNotebook,
     onToggleCommand,
     onToggleSettings,
     onOpenSettings,
     onToggleSidebar,
     onFocusInput,
+    onRestoreAndFocusInput,
     onCreateNotebook,
     onCloseModals
   ])

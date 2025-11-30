@@ -100,15 +100,25 @@ function App() {
     window.dispatchEvent(new CustomEvent('focus-input'))
   }, [])
 
+  const restoreAndFocusInput = useCallback(async () => {
+    // Restore last active notebook, then focus input after a short delay
+    await restoreLastActiveNotebook()
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('focus-input'))
+    }, 100)
+  }, [restoreLastActiveNotebook])
+
   useKeyboardShortcuts({
     isCommandOpen,
     isSettingsOpen,
     isAnyModalOpen,
+    hasActiveNotebook: !!activeNotebook,
     onToggleCommand: toggleCommand,
     onToggleSettings: toggleSettings,
     onOpenSettings: useCallback(() => openSettings('general'), [openSettings]),
     onToggleSidebar: toggleSidebar,
     onFocusInput: focusInput,
+    onRestoreAndFocusInput: restoreAndFocusInput,
     onCreateNotebook: useCallback(() => openCreateModal(), [openCreateModal]),
     onCloseModals: closeAllModals
   })
