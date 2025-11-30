@@ -442,11 +442,14 @@ pub fn run() {
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
             let app_handle = app.handle().clone();
             
-            app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+            // Handle shortcut registration gracefully - don't crash if keybind is already taken
+            if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
                     let _ = show_quick_capture(app_handle.clone());
                 }
-            })?;
+            }) {
+                eprintln!("[Warning] Failed to register global shortcut (Alt+Space): {}. The shortcut may already be in use by another application.", e);
+            }
             
             Ok(())
         })
