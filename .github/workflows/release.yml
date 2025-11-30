@@ -55,15 +55,19 @@ jobs:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
             target: 'aarch64-apple-darwin'
+            artifact_name: 'macos-aarch64'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
             target: 'x86_64-apple-darwin'
+            artifact_name: 'macos-x86_64'
           - platform: 'ubuntu-22.04'
             args: ''
             target: ''
+            artifact_name: 'linux'
           - platform: 'windows-latest'
             args: ''
             target: ''
+            artifact_name: 'windows'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -125,14 +129,132 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
+          # Don't upload directly to release - we'll do it in a separate job
           appVersion: ${{ needs.create-release.outputs.version }}
           args: ${{ matrix.args }}
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
 
-  publish-release:
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.artifact_name }}
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/deb/*.deb.sig
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/rpm/*.rpm.sig
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/appimage/*.AppImage.sig
+            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
+            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/dmg/*.dmg.sig
+            src-tauri/target/release/bundle/macos/*.app
+            src-tauri/target/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/msi/*.msi.sig
+            latest.json
+          if-no-files-found: ignore
+          retention-days: 1
+
+  upload-release-assets:
     needs: [create-release, build-tauri]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f 2>/dev/null || echo "No artifacts directory"
+          ls -la . 2>/dev/null || true
+
+      - name: Upload assets to release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const releaseId = ${{ needs.create-release.outputs.release_id }};
+
+            // Helper function to recursively find files
+            function findFiles(dir, files = []) {
+              if (!fs.existsSync(dir)) return files;
+              const entries = fs.readdirSync(dir, { withFileTypes: true });
+              for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  findFiles(fullPath, files);
+                } else {
+                  files.push(fullPath);
+                }
+              }
+              return files;
+            }
+
+            // Find all files to upload
+            const allFiles = findFiles('artifacts');
+            console.log('Found files:', allFiles);
+
+            // Filter to only include release assets (not .app directories, etc)
+            const releaseExtensions = ['.deb', '.rpm', '.AppImage', '.dmg', '.exe', '.msi', '.tar.gz', '.sig', '.json'];
+            const filesToUpload = allFiles.filter(f => {
+              const name = path.basename(f);
+              return releaseExtensions.some(ext => name.endsWith(ext));
+            });
+
+            console.log('Files to upload:', filesToUpload);
+
+            // Get existing assets to avoid duplicates
+            const { data: existingAssets } = await github.rest.repos.listReleaseAssets({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              per_page: 100
+            });
+            const existingNames = new Set(existingAssets.map(a => a.name));
+
+            // Upload each file
+            for (const filePath of filesToUpload) {
+              const fileName = path.basename(filePath);
+              
+              // Skip if already exists
+              if (existingNames.has(fileName)) {
+                console.log(`Skipping ${fileName} - already exists`);
+                continue;
+              }
+
+              console.log(`Uploading ${fileName}...`);
+              const fileContent = fs.readFileSync(filePath);
+              
+              try {
+                await github.rest.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: releaseId,
+                  name: fileName,
+                  data: fileContent
+                });
+                console.log(`Uploaded ${fileName}`);
+              } catch (error) {
+                console.error(`Failed to upload ${fileName}:`, error.message);
+                // Continue with other files even if one fails
+              }
+            }
+
+  publish-release:
+    needs: [create-release, upload-release-assets]
     permissions:
       contents: write
     runs-on: ubuntu-latest
