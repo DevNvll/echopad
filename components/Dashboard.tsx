@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { PanelLeft, Plus, Command } from 'lucide-react'
+import { PanelLeft, Plus } from 'lucide-react'
 import { StatsBar } from './dashboard/StatsBar'
 import { RecentNotes } from './dashboard/RecentNotes'
+import { FavoriteNotes } from './dashboard/FavoriteNotes'
 import { PinnedNotebooks } from './dashboard/PinnedNotebooks'
 import { TagCloud } from './dashboard/TagCloud'
-import { useVaultStore, useNotebookStore, useNotesStore, useTagsStore } from '../stores'
+import { useVaultStore, useNotebookStore, useNotesStore, useTagsStore, useUIStore } from '../stores'
 
 interface DashboardProps {
   isSidebarCollapsed: boolean
@@ -21,19 +22,22 @@ export function Dashboard({
 }: DashboardProps) {
   const { vaultPath } = useVaultStore()
   const { notebooks, allNotebooks, selectNotebook } = useNotebookStore()
-  const { recentNotes, totalNotesCount, loadRecentNotes, loadTotalNotesCount } = useNotesStore()
+  const { recentNotes, favoriteNotes, totalNotesCount, loadRecentNotes, loadFavoriteNotes, loadTotalNotesCount, setTarget } = useNotesStore()
   const { allTags } = useTagsStore()
+  const { openCommand } = useUIStore()
 
   useEffect(() => {
     if (vaultPath) {
       loadRecentNotes(vaultPath)
+      loadFavoriteNotes(vaultPath)
       loadTotalNotesCount(vaultPath)
     }
-  }, [vaultPath, loadRecentNotes, loadTotalNotesCount])
+  }, [vaultPath, loadRecentNotes, loadFavoriteNotes, loadTotalNotesCount])
 
   const pinnedNotebooks = allNotebooks().filter((nb) => nb.isPinned)
 
-  const handleNoteClick = (notebookPath: string) => {
+  const handleNoteClick = (notebookPath: string, filename: string) => {
+    setTarget(filename)
     selectNotebook(notebookPath)
   }
 
@@ -56,6 +60,13 @@ export function Dashboard({
           )}
           <h1 className="text-lg font-semibold text-textMain">Dashboard</h1>
         </div>
+        <button
+          onClick={onCreateNotebook}
+          className="flex items-center gap-2 px-3 py-1.5 bg-brand hover:bg-brand/90 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          <span>New Notebook</span>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -73,6 +84,11 @@ export function Dashboard({
             />
 
             <div className="space-y-6">
+              <FavoriteNotes
+                notes={favoriteNotes}
+                onNoteClick={handleNoteClick}
+              />
+
               {pinnedNotebooks.length > 0 && (
                 <PinnedNotebooks
                   notebooks={pinnedNotebooks}
@@ -82,32 +98,11 @@ export function Dashboard({
 
               <TagCloud
                 tags={allTags}
-                onTagClick={onOpenCommandPalette}
+                onTagClick={(tag) => openCommand(`#${tag}`)}
               />
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-4 pt-4">
-            <button
-              onClick={onCreateNotebook}
-              className="flex items-center gap-2.5 px-5 py-3 bg-brand hover:bg-brand/90 text-white font-semibold rounded-xl transition-colors"
-            >
-              <Plus size={18} strokeWidth={2.5} />
-              <span>New Notebook</span>
-            </button>
-
-            <div className="flex items-center gap-1.5 text-[11px] text-textMuted/40">
-              <span>Press</span>
-              <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-mono text-[10px]">
-                Ctrl
-              </kbd>
-              <span>+</span>
-              <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-mono text-[10px]">
-                K
-              </kbd>
-              <span>for command palette</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>

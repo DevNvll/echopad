@@ -22,6 +22,7 @@ interface MessageItemProps {
   onDeleteCancel: () => void
   onDeleteConfirm: () => void
   onTagClick: (tag: string) => void
+  onToggleFavorite: () => void
 }
 
 export const MessageItem = React.memo(
@@ -42,7 +43,8 @@ export const MessageItem = React.memo(
         onDelete,
         onDeleteCancel,
         onDeleteConfirm,
-        onTagClick
+        onTagClick,
+        onToggleFavorite
       },
       ref
     ) => {
@@ -128,6 +130,7 @@ export const MessageItem = React.memo(
                   <MessageActions
                     filename={note.filename}
                     content={note.content}
+                    isFavorite={note.isFavorite ?? false}
                     copiedMessageId={copiedMessageId}
                     deleteConfirmId={deleteConfirmId}
                     onEdit={onEdit}
@@ -135,6 +138,7 @@ export const MessageItem = React.memo(
                     onDelete={onDelete}
                     onDeleteCancel={onDeleteCancel}
                     onDeleteConfirm={onDeleteConfirm}
+                    onToggleFavorite={onToggleFavorite}
                   />
                 </>
               )}

@@ -55,6 +55,14 @@ async function getDb(): Promise<Database> {
       ALTER TABLE vault_settings ADD COLUMN icon TEXT
     `).catch(() => {});
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag)`);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS favorite_notes (
+        filename TEXT,
+        notebook_path TEXT,
+        favorited_at INTEGER,
+        PRIMARY KEY (filename, notebook_path)
+      )
+    `);
   }
   return db;
 }
@@ -487,5 +495,69 @@ export async function getQuickCaptureNotebook(): Promise<string | null> {
 
 export async function setQuickCaptureNotebook(notebookPath: string): Promise<void> {
   await saveSetting('quickCaptureNotebook', notebookPath);
+}
+
+// Favorite notes functions
+export async function isNoteFavorite(filename: string, notebookPath: string): Promise<boolean> {
+  const database = await getDb();
+  const result = await database.select<{ filename: string }[]>(
+    'SELECT filename FROM favorite_notes WHERE filename = ? AND notebook_path = ?',
+    [filename, notebookPath]
+  );
+  return result.length > 0;
+}
+
+export async function toggleNoteFavorite(filename: string, notebookPath: string): Promise<boolean> {
+  const database = await getDb();
+  const existing = await database.select<{ filename: string }[]>(
+    'SELECT filename FROM favorite_notes WHERE filename = ? AND notebook_path = ?',
+    [filename, notebookPath]
+  );
+  
+  if (existing.length > 0) {
+    await database.execute(
+      'DELETE FROM favorite_notes WHERE filename = ? AND notebook_path = ?',
+      [filename, notebookPath]
+    );
+    return false;
+  } else {
+    await database.execute(
+      'INSERT INTO favorite_notes (filename, notebook_path, favorited_at) VALUES (?, ?, ?)',
+      [filename, notebookPath, Date.now()]
+    );
+    return true;
+  }
+}
+
+export async function getFavoriteNotes(vaultPath: string): Promise<Note[]> {
+  const database = await getDb();
+  const result = await database.select<{ filename: string; notebook_path: string; favorited_at: number }[]>(
+    'SELECT filename, notebook_path, favorited_at FROM favorite_notes ORDER BY favorited_at DESC'
+  );
+  
+  const notes: Note[] = [];
+  for (const row of result) {
+    try {
+      const note = await readNote(vaultPath, row.notebook_path, row.filename);
+      note.isFavorite = true;
+      notes.push(note);
+    } catch {
+      // Note might have been deleted, remove from favorites
+      await database.execute(
+        'DELETE FROM favorite_notes WHERE filename = ? AND notebook_path = ?',
+        [row.filename, row.notebook_path]
+      );
+    }
+  }
+  
+  return notes;
+}
+
+export async function removeNoteFavorite(filename: string, notebookPath: string): Promise<void> {
+  const database = await getDb();
+  await database.execute(
+    'DELETE FROM favorite_notes WHERE filename = ? AND notebook_path = ?',
+    [filename, notebookPath]
+  );
 }
 

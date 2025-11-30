@@ -6,6 +6,7 @@ export interface Note {
   hasLink: boolean;
   urls: string[];
   notebookName: string;
+  isFavorite?: boolean;
 }
 
 export interface NoteMetadata {

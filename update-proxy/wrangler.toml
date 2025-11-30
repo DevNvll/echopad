@@ -1,0 +1,28 @@
+# Echopad Update Proxy - Cloudflare Workers Configuration
+# 
+# Deployment:
+# 1. Create a GitHub Personal Access Token with `repo` scope
+# 2. Set the secret: wrangler secret put GITHUB_TOKEN
+# 3. Deploy: pnpm deploy
+
+name = "echopad-update-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Account ID - uncomment and fill in your Cloudflare account ID
+# account_id = "your-account-id"
+
+# Custom domain (optional) - configure in Cloudflare dashboard after deployment
+# routes = [
+#   { pattern = "updates.echopad.app/*", zone_name = "echopad.app" }
+# ]
+
+[vars]
+# GitHub repository details
+GITHUB_OWNER = "DevNvll"
+GITHUB_REPO = "echopad"
+
+# The GITHUB_TOKEN should be set as a secret, not here!
+# Run: wrangler secret put GITHUB_TOKEN
+# Then paste your GitHub Personal Access Token (with repo scope)
+

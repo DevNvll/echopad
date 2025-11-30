@@ -38,7 +38,9 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     updateNote,
     deleteNote,
     setEditing,
-    loadMoreNotes
+    loadMoreNotes,
+    toggleFavorite,
+    clearTarget
   } = useNotesStore()
   const { syncNoteTags, removeNoteTags } = useTagsStore()
   const { openCommand, openContextMenu, closeContextMenu } = useUIStore()
@@ -217,6 +219,13 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     [openContextMenu]
   )
 
+  const handleToggleFavorite = useCallback(
+    async (filename: string, notebookPath: string) => {
+      await toggleFavorite(filename, notebookPath)
+    },
+    [toggleFavorite]
+  )
+
   // Track the last note to detect new notes (vs loading older ones)
   const lastNoteRef = useRef<string | null>(null)
   const hasInitialScrolled = useRef(false)
@@ -231,6 +240,13 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   // Scroll to bottom on initial load or when new note is added
   useEffect(() => {
     if (isLoading || notes.length === 0) return
+
+    // Skip scroll-to-bottom if we have a target message to scroll to
+    if (targetMessageId) {
+      hasInitialScrolled.current = true
+      lastNoteRef.current = notes[notes.length - 1]?.filename
+      return
+    }
 
     const currentLastNote = notes[notes.length - 1]?.filename
 
@@ -262,7 +278,7 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     }
 
     lastNoteRef.current = currentLastNote
-  }, [notes, isLoading, scrollToBottom])
+  }, [notes, isLoading, scrollToBottom, targetMessageId])
 
   // Scroll to target message when targetMessageId changes
   useEffect(() => {
@@ -280,13 +296,18 @@ export const MessageList: React.FC = React.memo(function MessageList() {
             element.classList.add('bg-brand/10', 'ring-1', 'ring-brand/20')
             setTimeout(() => {
               element.classList.remove('bg-brand/10', 'ring-1', 'ring-brand/20')
+              // Clear target after highlight animation completes
+              clearTarget()
             }, 2500)
+          } else {
+            // Element not found, clear target anyway
+            clearTarget()
           }
         }, 100)
       }, 150)
       return () => clearTimeout(timer)
     }
-  }, [targetMessageId, isLoading, noteIndexMap, virtualizer])
+  }, [targetMessageId, isLoading, noteIndexMap, virtualizer, clearTarget])
 
   if (isLoading) {
     return <LoadingState />
@@ -377,6 +398,7 @@ export const MessageList: React.FC = React.memo(function MessageList() {
                       setDeleteConfirmId(null)
                     }}
                     onTagClick={handleTagClick}
+                    onToggleFavorite={() => handleToggleFavorite(note.filename, note.notebookName)}
                   />
                 </div>
               )

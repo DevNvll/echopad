@@ -3,7 +3,7 @@ import { TagWithCount } from '../../api'
 
 interface TagCloudProps {
   tags: TagWithCount[]
-  onTagClick: () => void
+  onTagClick: (tag: string) => void
 }
 
 function getTagSize(count: number, maxCount: number): string {
@@ -51,7 +51,7 @@ export function TagCloud({ tags, onTagClick }: TagCloudProps) {
         {topTags.map((tag) => (
           <button
             key={tag.tag}
-            onClick={onTagClick}
+            onClick={() => onTagClick(tag.tag)}
             className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surfaceHighlight/40 hover:bg-brand/20 border border-transparent hover:border-brand/30 transition-all ${getTagOpacity(tag.count, maxCount)}`}
           >
             <Hash size={10} className="text-brand/70" />
