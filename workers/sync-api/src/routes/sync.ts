@@ -373,28 +373,48 @@ async function processChange(
 
   // Handle create/update
   if (existing) {
+    // Check if file content exists in R2 storage
+    const r2Object = await env.STORAGE.head(existing.storage_key);
+    const hasR2Content = !!r2Object;
+
     // Check for conflict
     if (base_version !== null && base_version !== existing.version) {
       // Content hash match means no actual conflict
       if (content_hash === existing.content_hash) {
+        if (hasR2Content) {
+          // Content exists, no need to re-upload
+          return {
+            encrypted_path,
+            status: 'accepted',
+            upload_url: null,
+            new_version: existing.version,
+            file_id: existing.id,
+            error: null,
+          };
+        }
+        // Content missing from R2 - need to allow upload, fall through
+      } else {
+        // Real conflict - different content hashes
         return {
           encrypted_path,
-          status: 'accepted',
+          status: 'conflict',
           upload_url: null,
-          new_version: existing.version,
+          new_version: null,
           file_id: existing.id,
-          error: null,
+          error: `Version conflict: expected ${base_version}, found ${existing.version}`,
         };
       }
+    }
 
-      // Real conflict
+    // If content exists in R2 and hashes match, no need to re-upload
+    if (hasR2Content && content_hash === existing.content_hash) {
       return {
         encrypted_path,
-        status: 'conflict',
+        status: 'accepted',
         upload_url: null,
-        new_version: null,
+        new_version: existing.version,
         file_id: existing.id,
-        error: `Version conflict: expected ${base_version}, found ${existing.version}`,
+        error: null,
       };
     }
 

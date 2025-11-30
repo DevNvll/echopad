@@ -158,6 +158,14 @@ impl SyncEngine {
         let change_set = self.get_local_changes(&scan_result);
         println!("[Sync] Detected {} changed files, {} deleted files", 
             change_set.changed.len(), change_set.deleted.len());
+        
+        // Log the first few changed files for debugging
+        for (i, info) in change_set.changed.iter().take(5).enumerate() {
+            println!("[Sync]   Changed file {}: {}", i + 1, info.relative_path);
+        }
+        if change_set.changed.len() > 5 {
+            println!("[Sync]   ... and {} more changed files", change_set.changed.len() - 5);
+        }
 
         // 4. Push only changed files
         match self.push_changes_incremental(&change_set, &scan_result).await {
@@ -250,11 +258,23 @@ impl SyncEngine {
                 .map_err(|e| SyncError::InvalidData(e.to_string()))?;
 
             // Process each change
+            println!("[Sync] Processing {} remote changes", pull_response.changes.len());
             for change in &pull_response.changes {
-                if let Err(e) = self.apply_remote_change(vault_path, change).await {
-                    eprintln!("Failed to apply change for {}: {}", change.encrypted_path, e);
-                } else {
-                    downloaded += 1;
+                match self.apply_remote_change(vault_path, change).await {
+                    Ok(()) => {
+                        downloaded += 1;
+                        // Decode path for logging
+                        if let Ok(path) = decode_path(&change.encrypted_path) {
+                            println!("[Sync]   Downloaded: {} (op: {})", path, change.operation);
+                        }
+                    }
+                    Err(e) => {
+                        if let Ok(path) = decode_path(&change.encrypted_path) {
+                            eprintln!("[Sync]   Failed to apply change for {}: {}", path, e);
+                        } else {
+                            eprintln!("[Sync]   Failed to apply change for {}: {}", change.encrypted_path, e);
+                        }
+                    }
                 }
             }
 

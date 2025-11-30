@@ -100,9 +100,14 @@ fn scan_directory(
             }
 
             // Get file info
-            if let Ok(file_info) = get_file_info(root, &path) {
-                *total_size += file_info.size_bytes;
-                files.insert(file_info.relative_path.clone(), file_info);
+            match get_file_info(root, &path) {
+                Ok(file_info) => {
+                    *total_size += file_info.size_bytes;
+                    files.insert(file_info.relative_path.clone(), file_info);
+                }
+                Err(e) => {
+                    eprintln!("[Scanner] Failed to read file {:?}: {}", path, e);
+                }
             }
         }
     }
