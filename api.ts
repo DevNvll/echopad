@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import Database from '@tauri-apps/plugin-sql';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { Note, NoteMetadata, Notebook, AppSettings } from './types';
@@ -13,7 +14,10 @@ let db: Database | null = null;
 
 async function getDb(): Promise<Database> {
   if (!db) {
-    db = await Database.load('sqlite:echopad.db');
+    // Use explicit app data directory path to ensure database persists across updates
+    const dataDir = await appDataDir();
+    const dbPath = await join(dataDir, 'echopad.db');
+    db = await Database.load(`sqlite:${dbPath}`);
     await db.execute(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
