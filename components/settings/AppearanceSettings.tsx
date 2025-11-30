@@ -2,6 +2,7 @@ import { HexColorPicker, HexColorInput } from 'react-colorful';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { IconPicker, getIconByName } from '@/components/IconPicker';
 
 const PRESET_COLORS = [
   { name: 'Indigo', value: '#818cf8' },
@@ -20,21 +21,27 @@ const PRESET_COLORS = [
 
 interface AppearanceSettingsProps {
   accentColor: string;
+  vaultIcon: string;
   showColorPicker: boolean;
   onToggleColorPicker: () => void;
   onColorSelect: (color: string) => void;
+  onIconSelect: (icon: string) => void;
   onApplyToAllVaults: (color: string) => void;
   vaultName: string | null;
 }
 
 export function AppearanceSettings({
   accentColor,
+  vaultIcon,
   showColorPicker,
   onToggleColorPicker,
   onColorSelect,
+  onIconSelect,
   onApplyToAllVaults,
   vaultName,
 }: AppearanceSettingsProps) {
+  const CurrentIcon = getIconByName(vaultIcon);
+  
   return (
     <div className="space-y-6">
       <div>
@@ -44,7 +51,16 @@ export function AppearanceSettings({
       <Separator className="bg-border/50" />
       
       {vaultName && (
-        <div className="p-3 bg-brand/5 border border-brand/20 rounded-lg">
+        <div className="p-3 bg-brand/5 border border-brand/20 rounded-lg flex items-center gap-3">
+          <div 
+            className="w-10 h-10 rounded-lg flex items-center justify-center border"
+            style={{
+              background: `linear-gradient(135deg, ${accentColor}33, ${accentColor}11)`,
+              borderColor: `${accentColor}33`
+            }}
+          >
+            <CurrentIcon size={20} style={{ color: accentColor }} />
+          </div>
           <p className="text-xs text-textMuted">
             Theme settings will be applied to <span className="font-medium text-brand">{vaultName}</span>
           </p>
@@ -52,6 +68,17 @@ export function AppearanceSettings({
       )}
       
       <div className="space-y-4">
+        <div className="space-y-3">
+          <Label className="text-sm text-textMain">Vault Icon</Label>
+          <IconPicker
+            selectedIcon={vaultIcon}
+            onSelectIcon={onIconSelect}
+            accentColor={accentColor}
+          />
+        </div>
+        
+        <Separator className="bg-border/50" />
+        
         <div className="space-y-3">
           <Label className="text-sm text-textMain">Accent Color</Label>
           <div className="flex flex-wrap gap-2">

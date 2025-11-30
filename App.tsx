@@ -1,10 +1,16 @@
 import { useEffect, useCallback } from 'react'
-import { open } from '@tauri-apps/plugin-dialog'
+import { invoke } from '@tauri-apps/api/core'
 import { Note, Notebook } from './types'
-import { getSetting, openNotebookInExplorer } from './api'
+import {
+  getSetting,
+  openNotebookInExplorer,
+  saveVaultIcon,
+  saveVaultAccentColor
+} from './api'
 import { Sidebar } from './components/Sidebar'
 import { InputArea } from './components/InputArea'
 import { MessageList } from './components/MessageList'
+import { NoNotebookSelected } from './components/NoNotebookSelected'
 import {
   CreateNotebookModal,
   EditNotebookModal,
@@ -13,7 +19,14 @@ import {
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
 import { SettingsModal } from './components/SettingsModal'
-import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
+import {
+  Trash2,
+  Edit2,
+  Copy,
+  FolderOpen,
+  FolderPlus,
+  PanelLeft
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
 import { SplashScreen } from './components/SplashScreen'
@@ -49,7 +62,8 @@ function App() {
     restoreLastActiveNotebook
   } = useNotebookStore()
 
-  const { loadNotes, clearNotes, setEditing, deleteNote } = useNotesStore()
+  const { notes, loadNotes, clearNotes, setEditing, deleteNote } =
+    useNotesStore()
 
   const { isLoaded: isTagsLoaded, loadTags, removeNoteTags } = useTagsStore()
 
@@ -125,16 +139,27 @@ function App() {
     loadNotes(vaultPath, activeNotebook)
   }, [vaultPath, activeNotebook, loadNotes, clearNotes])
 
-  const handleSelectVault = async () => {
-    const selected = await open({
+  const handleSelectVault = async (): Promise<string | null> => {
+    const selected = await invoke('open', {
       directory: true,
       multiple: false,
       title: 'Select Vault Folder'
     })
 
     if (selected && typeof selected === 'string') {
-      await selectVault(selected)
+      return selected
     }
+    return null
+  }
+
+  const handleConfirmVault = async (
+    path: string,
+    icon: string,
+    accentColor: string
+  ) => {
+    await saveVaultIcon(path, icon)
+    await saveVaultAccentColor(path, accentColor)
+    await selectVault(path)
   }
 
   const handleDeleteMessage = async (filename: string) => {
@@ -194,6 +219,7 @@ function App() {
       <VaultSetup
         appSettings={appSettings}
         onSelectVault={handleSelectVault}
+        onConfirmVault={handleConfirmVault}
         onOpenCommandPalette={() => openCommand()}
       />
     )
@@ -223,18 +249,47 @@ function App() {
             )}
 
             <div className="flex-1 flex flex-col min-w-0 bg-background relative shadow-2xl">
-              <NotebookHeader
-                notebookName={notebook?.name}
-                isSidebarCollapsed={isSidebarCollapsed}
-                onToggleSidebar={toggleSidebar}
-              />
+              {activeNotebook ? (
+                <>
+                  <NotebookHeader
+                    notebookName={notebook?.name}
+                    notebookPath={activeNotebook || undefined}
+                    noteCount={notes.length}
+                    isSidebarCollapsed={isSidebarCollapsed}
+                    onToggleSidebar={toggleSidebar}
+                    onOpenInExplorer={
+                      notebook
+                        ? () => openNotebookInExplorer(notebook.path)
+                        : undefined
+                    }
+                  />
 
-              <div className="flex-1 flex flex-row min-h-0 pt-16 relative bg-[#050505]">
-                <div className="flex-1 flex flex-col min-w-0 z-0">
-                  <MessageList />
-                  <InputArea />
+                  <div className="flex-1 flex flex-row min-h-0 pt-16 relative bg-[#050505]">
+                    <div className="flex-1 flex flex-col min-w-0 z-0">
+                      <MessageList />
+                      <InputArea />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col min-h-0 bg-[#050505]">
+                  <div className="h-16 border-b border-border/40 flex items-center pl-4 pr-8 bg-glass backdrop-blur-md">
+                    {isSidebarCollapsed && (
+                      <button
+                        onClick={toggleSidebar}
+                        className="p-2 rounded-md text-textMuted/60 hover:text-textMain hover:bg-surfaceHighlight/50 transition-colors"
+                        title="Show sidebar"
+                      >
+                        <PanelLeft size={18} />
+                      </button>
+                    )}
+                  </div>
+                  <NoNotebookSelected
+                    hasNotebooks={notebooks.length > 0}
+                    onCreateNotebook={() => openCreateModal()}
+                  />
                 </div>
-              </div>
+              )}
             </div>
 
             <CommandPalette />

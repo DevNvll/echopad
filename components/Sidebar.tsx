@@ -7,13 +7,13 @@ import {
   PinOff,
   ChevronDown,
   ChevronRight,
-  FolderOpen,
   Check,
   Settings
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { getKnownVaults, KnownVault } from '../api'
 import { useVaultStore, useNotebookStore, useUIStore } from '../stores'
+import { getIconByName } from './IconPicker'
+import { useKnownVaults, useVaultIcons } from '../hooks'
 
 interface SidebarProps {
   width: number
@@ -77,23 +77,30 @@ const NotebookTreeItem: React.FC<NotebookTreeItemProps> = ({
         )}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
-        {hasChildren && (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleExpand(notebook.relativePath)
-            }}
-            className="shrink-0 p-0.5 hover:bg-surfaceHighlight rounded text-textMuted/60 hover:text-textMuted"
-          >
-            {isExpanded ? (
+        <div
+          role={hasChildren ? 'button' : undefined}
+          tabIndex={hasChildren ? 0 : undefined}
+          onClick={
+            hasChildren
+              ? (e) => {
+                  e.stopPropagation()
+                  onToggleExpand(notebook.relativePath)
+                }
+              : undefined
+          }
+          className={clsx(
+            'shrink-0 p-0.5 rounded w-[18px] h-[18px] flex items-center justify-center',
+            hasChildren &&
+              'hover:bg-surfaceHighlight text-textMuted/60 hover:text-textMuted cursor-pointer'
+          )}
+        >
+          {hasChildren &&
+            (isExpanded ? (
               <ChevronDown size={14} />
             ) : (
               <ChevronRight size={14} />
-            )}
-          </div>
-        )}
+            ))}
+        </div>
 
         <Hash
           size={16}
@@ -170,19 +177,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
 
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
-  const [knownVaults, setKnownVaults] = useState<KnownVault[]>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const { data: knownVaults = [] } = useKnownVaults()
+  const { data: vaultIcons = {} } = useVaultIcons(knownVaults)
 
   const pinnedNotebooks = collectPinnedNotebooks(notebooks)
   const vaultName = vaultPath?.split(/[/\\]/).pop() || 'Unknown Vault'
-
-  useEffect(() => {
-    const loadVaults = async () => {
-      const vaults = await getKnownVaults()
-      setKnownVaults(vaults)
-    }
-    loadVaults()
-  }, [vaultPath])
+  const currentVaultIcon = vaultPath
+    ? vaultIcons[vaultPath] || 'FolderOpen'
+    : 'FolderOpen'
+  const CurrentVaultIconComponent = getIconByName(currentVaultIcon)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -293,7 +298,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
           className="w-full flex items-center gap-3 p-2.5 rounded-lg bg-surfaceHighlight/40 hover:bg-surfaceHighlight/60 transition-colors group"
         >
           <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brand/20 to-brand/5 border border-brand/20 flex items-center justify-center shrink-0">
-            <FolderOpen size={16} className="text-brand" />
+            <CurrentVaultIconComponent size={16} className="text-brand" />
           </div>
           <div className="flex-1 min-w-0 text-left">
             <div className="text-[13px] font-semibold text-textMain truncate leading-tight">
@@ -317,6 +322,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
             <div className="p-1.5 max-h-[200px] overflow-y-auto">
               {knownVaults.map((vault) => {
                 const isActive = vault.path === vaultPath
+                const VaultIcon = getIconByName(
+                  vaultIcons[vault.path] || 'FolderOpen'
+                )
                 return (
                   <button
                     key={vault.path}
@@ -331,7 +339,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                       isActive ? 'bg-brand/10' : 'hover:bg-surfaceHighlight/50'
                     )}
                   >
-                    <FolderOpen
+                    <VaultIcon
                       size={16}
                       className={
                         isActive

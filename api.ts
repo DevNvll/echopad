@@ -43,9 +43,13 @@ async function getDb(): Promise<Database> {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS vault_settings (
         vault_path TEXT PRIMARY KEY,
-        accent_color TEXT
+        accent_color TEXT,
+        icon TEXT
       )
     `);
+    await db.execute(`
+      ALTER TABLE vault_settings ADD COLUMN icon TEXT
+    `).catch(() => {});
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag)`);
   }
   return db;
@@ -128,8 +132,25 @@ export async function getVaultAccentColor(vaultPath: string): Promise<string | n
 export async function saveVaultAccentColor(vaultPath: string, accentColor: string): Promise<void> {
   const database = await getDb();
   await database.execute(
-    'INSERT OR REPLACE INTO vault_settings (vault_path, accent_color) VALUES (?, ?)',
-    [vaultPath, accentColor]
+    'INSERT INTO vault_settings (vault_path, accent_color) VALUES (?, ?) ON CONFLICT(vault_path) DO UPDATE SET accent_color = ?',
+    [vaultPath, accentColor, accentColor]
+  );
+}
+
+export async function getVaultIcon(vaultPath: string): Promise<string | null> {
+  const database = await getDb();
+  const result = await database.select<{ icon: string | null }[]>(
+    'SELECT icon FROM vault_settings WHERE vault_path = ?',
+    [vaultPath]
+  );
+  return result.length > 0 ? result[0].icon : null;
+}
+
+export async function saveVaultIcon(vaultPath: string, icon: string): Promise<void> {
+  const database = await getDb();
+  await database.execute(
+    'INSERT INTO vault_settings (vault_path, icon) VALUES (?, ?) ON CONFLICT(vault_path) DO UPDATE SET icon = ?',
+    [vaultPath, icon, icon]
   );
 }
 
@@ -138,8 +159,8 @@ export async function applyAccentColorToAllVaults(accentColor: string): Promise<
   const vaults = await getKnownVaults();
   for (const vault of vaults) {
     await database.execute(
-      'INSERT OR REPLACE INTO vault_settings (vault_path, accent_color) VALUES (?, ?)',
-      [vault.path, accentColor]
+      'INSERT INTO vault_settings (vault_path, accent_color) VALUES (?, ?) ON CONFLICT(vault_path) DO UPDATE SET accent_color = ?',
+      [vault.path, accentColor, accentColor]
     );
   }
 }

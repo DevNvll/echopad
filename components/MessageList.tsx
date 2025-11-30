@@ -109,7 +109,7 @@ const EditTextarea: React.FC<{
 
 export const MessageList: React.FC = React.memo(function MessageList() {
   const { vaultPath } = useVaultStore()
-  const { activeNotebook, notebookMap } = useNotebookStore()
+  const { activeNotebook } = useNotebookStore()
   const {
     notes,
     isLoading,
@@ -121,8 +121,6 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   } = useNotesStore()
   const { syncNoteTags, removeNoteTags } = useTagsStore()
   const { openCommand, openContextMenu, closeContextMenu } = useUIStore()
-
-  const notebooks = notebookMap()
 
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
@@ -317,15 +315,47 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   }
 
   if (notes.length === 0) {
+    const notebookName = activeNotebook
+      ? activeNotebook.split('/').pop()
+      : 'notebook'
+
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-textMuted/50 gap-4 p-8 pb-28 text-center select-none">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-3xl bg-linear-to-tr from-surfaceHighlight to-transparent border border-white/5 flex items-center justify-center mb-2 shadow-lg">
-            <span className="text-4xl">✨</span>
+      <div className="flex-1 flex flex-col items-center justify-center p-8 pb-32 select-none">
+        <div className="flex flex-col items-center gap-6 max-w-md text-center">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-brand/20 via-brand/10 to-transparent border border-brand/20 flex items-center justify-center shadow-2xl shadow-brand/10">
+              <Hash className="text-brand/80" size={36} strokeWidth={2.5} />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-surface border border-brand/30 flex items-center justify-center">
+              <span className="text-sm">✨</span>
+            </div>
           </div>
-          <p className="text-base font-medium text-textMuted">
-            This is the beginning of this notebook.
-          </p>
+
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold text-textMain tracking-tight">
+              Welcome to <span className="text-brand">{notebookName}</span>
+            </h3>
+            <p className="text-sm text-textMuted/70 leading-relaxed">
+              This notebook is ready for your thoughts, ideas, and notes.
+              <br />
+              Start typing below to create your first entry.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 mt-2 text-[12px] text-textMuted/50">
+            <div className="flex items-center gap-2">
+              <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-mono text-[10px]">
+                Enter
+              </kbd>
+              <span>to save a note</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-mono text-[10px]">
+                #tag
+              </kbd>
+              <span>to organize with tags</span>
+            </div>
+          </div>
         </div>
       </div>
     )

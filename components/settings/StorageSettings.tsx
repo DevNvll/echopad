@@ -1,12 +1,14 @@
-import { FolderOpen, Plus, Trash2, Check } from 'lucide-react';
+import { Plus, Trash2, Check } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { KnownVault } from '@/api';
+import { getIconByName } from '@/components/IconPicker';
 
 interface StorageSettingsProps {
   vaultPath: string | null;
   knownVaults: KnownVault[];
+  vaultIcons: Record<string, string>;
   onAddVault: () => void;
   onSwitchVault: (path: string) => void;
   onRemoveVault: (path: string) => void;
@@ -15,6 +17,7 @@ interface StorageSettingsProps {
 export function StorageSettings({
   vaultPath,
   knownVaults,
+  vaultIcons,
   onAddVault,
   onSwitchVault,
   onRemoveVault,
@@ -49,6 +52,7 @@ export function StorageSettings({
               <VaultItem
                 key={vault.path}
                 vault={vault}
+                icon={vaultIcons[vault.path] || 'FolderOpen'}
                 isActive={vault.path === vaultPath}
                 onSwitch={() => onSwitchVault(vault.path)}
                 onRemove={() => onRemoveVault(vault.path)}
@@ -67,12 +71,15 @@ export function StorageSettings({
 
 interface VaultItemProps {
   vault: KnownVault;
+  icon: string;
   isActive: boolean;
   onSwitch: () => void;
   onRemove: () => void;
 }
 
-function VaultItem({ vault, isActive, onSwitch, onRemove }: VaultItemProps) {
+function VaultItem({ vault, icon, isActive, onSwitch, onRemove }: VaultItemProps) {
+  const IconComponent = getIconByName(icon);
+  
   return (
     <div
       className={cn(
@@ -88,7 +95,7 @@ function VaultItem({ vault, isActive, onSwitch, onRemove }: VaultItemProps) {
           ? "bg-gradient-to-br from-brand/30 to-brand/10 border border-brand/30"
           : "bg-surfaceHighlight border border-border"
       )}>
-        <FolderOpen size={18} className={isActive ? "text-brand" : "text-textMuted"} />
+        <IconComponent size={18} className={isActive ? "text-brand" : "text-textMuted"} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

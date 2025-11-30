@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Settings, Palette, Info, X, HardDrive } from 'lucide-react'
-import { open } from '@tauri-apps/plugin-dialog'
+import { invoke } from '@tauri-apps/api/core'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
   DialogContent,
@@ -9,7 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { useTheme } from '@/contexts/ThemeContext'
 import { cn } from '@/lib/utils'
-import { getKnownVaults, removeKnownVault, KnownVault } from '@/api'
+import { removeKnownVault } from '@/api'
 import {
   GeneralSettings,
   StorageSettings,
@@ -17,6 +18,13 @@ import {
   AboutSettings
 } from './settings'
 import { useVaultStore, useUIStore } from '../stores'
+import {
+  useKnownVaults,
+  useVaultIcons,
+  useVaultIcon,
+  useSaveVaultIcon,
+  vaultKeys
+} from '../hooks'
 
 export type SettingsSection = 'general' | 'storage' | 'appearance' | 'about'
 
@@ -34,6 +42,7 @@ const NAV_ITEMS: {
 export function SettingsModal() {
   const { vaultPath, selectVault, switchVault } = useVaultStore()
   const { isSettingsOpen, settingsSection, closeSettings } = useUIStore()
+  const queryClient = useQueryClient()
 
   const {
     settings,
@@ -46,21 +55,19 @@ export function SettingsModal() {
   )
   const [localAppName, setLocalAppName] = useState(settings.appName)
   const [showColorPicker, setShowColorPicker] = useState(false)
-  const [knownVaults, setKnownVaults] = useState<KnownVault[]>([])
+
+  const { data: knownVaults = [] } = useKnownVaults()
+  const { data: vaultIcons = {} } = useVaultIcons(knownVaults)
+  const { data: currentVaultIcon = 'FolderOpen' } = useVaultIcon(vaultPath)
+  const saveIconMutation = useSaveVaultIcon()
 
   const vaultName = vaultPath?.split(/[/\\]/).pop() || null
 
-  const loadVaults = useCallback(async () => {
-    const vaults = await getKnownVaults()
-    setKnownVaults(vaults)
-  }, [])
-
   useEffect(() => {
     if (isSettingsOpen) {
-      loadVaults()
       setActiveSection(settingsSection || 'general')
     }
-  }, [isSettingsOpen, loadVaults, settingsSection])
+  }, [isSettingsOpen, settingsSection])
 
   useEffect(() => {
     if (isSettingsOpen) {
@@ -88,16 +95,25 @@ export function SettingsModal() {
     [updateAccentColor]
   )
 
+  const handleIconSelect = useCallback(
+    (icon: string) => {
+      if (vaultPath) {
+        saveIconMutation.mutate({ vaultPath, icon })
+      }
+    },
+    [vaultPath, saveIconMutation]
+  )
+
   const handleRemoveVault = useCallback(
     async (path: string) => {
       await removeKnownVault(path)
-      await loadVaults()
+      queryClient.invalidateQueries({ queryKey: vaultKeys.list() })
     },
-    [loadVaults]
+    [queryClient]
   )
 
   const handleAddVault = useCallback(async () => {
-    const selected = await open({
+    const selected = await invoke('open', {
       directory: true,
       multiple: false,
       title: 'Select Vault Folder'
@@ -156,6 +172,7 @@ export function SettingsModal() {
               <StorageSettings
                 vaultPath={vaultPath}
                 knownVaults={knownVaults}
+                vaultIcons={vaultIcons}
                 onAddVault={handleAddVault}
                 onSwitchVault={handleSwitchVault}
                 onRemoveVault={handleRemoveVault}
@@ -164,9 +181,11 @@ export function SettingsModal() {
             {activeSection === 'appearance' && (
               <AppearanceSettings
                 accentColor={settings.accentColor}
+                vaultIcon={currentVaultIcon}
                 showColorPicker={showColorPicker}
                 onToggleColorPicker={() => setShowColorPicker(!showColorPicker)}
                 onColorSelect={handleColorSelect}
+                onIconSelect={handleIconSelect}
                 onApplyToAllVaults={updateAccentColorForAllVaults}
                 vaultName={vaultName}
               />
