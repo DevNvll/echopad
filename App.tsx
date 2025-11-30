@@ -33,7 +33,8 @@ import {
   useNotebookStore,
   useNotesStore,
   useTagsStore,
-  useUIStore
+  useUIStore,
+  useUpdaterStore
 } from './stores'
 
 function App() {
@@ -75,6 +76,8 @@ function App() {
     openDeleteModal
   } = useUIStore()
 
+  const { checkForUpdates } = useUpdaterStore()
+
   const {
     sidebarWidth,
     setSidebarWidth,
@@ -96,6 +99,14 @@ function App() {
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  // Check for updates on startup (with delay to not block initial render)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkForUpdates()
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [checkForUpdates])
 
   useEffect(() => {
     if (!vaultPath) return

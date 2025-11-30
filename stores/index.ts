@@ -3,4 +3,6 @@ export { useNotebookStore } from './notebookStore'
 export { useNotesStore } from './notesStore'
 export { useTagsStore } from './tagsStore'
 export { useUIStore } from './uiStore'
+export { useUpdaterStore } from './updaterStore'
+export type { UpdateStatus } from './updaterStore'
 

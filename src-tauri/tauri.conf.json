@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "NoteCord",
+  "productName": "Echopad",
   "version": "0.1.0",
-  "identifier": "com.notecord.app",
+  "identifier": "com.echopad.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "NoteCord",
+        "title": "Echopad",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
@@ -42,6 +42,19 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCRDMwNTM5M0U1NEM2OEQKUldTTnhsUStPUVhUaTc2YzNuU1htSWhkVU1CRWF3eWNmbGZGZ3dlcVQvcnpHOE1WT1U5dWpzdjIK",
+      "endpoints": [
+        "https://github.com/DevNvll/echopad/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

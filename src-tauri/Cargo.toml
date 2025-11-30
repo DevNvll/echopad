@@ -1,10 +1,10 @@
 [package]
-name = "app"
+name = "echopad"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "A Discord-inspired note taking application"
+authors = ["DevNvll"]
+license = "MIT"
+repository = "https://github.com/DevNvll/echopad"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -25,4 +25,6 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 base64 = "0.22"
