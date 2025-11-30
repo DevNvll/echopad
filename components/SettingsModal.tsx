@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Settings, Palette, Info, X, HardDrive } from 'lucide-react'
+import { Settings, Palette, Info, X, HardDrive, Wrench } from 'lucide-react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { useTheme } from '@/contexts/ThemeContext'
 import { cn } from '@/lib/utils'
 import { removeKnownVault } from '@/api'
@@ -15,7 +16,8 @@ import {
   GeneralSettings,
   StorageSettings,
   AppearanceSettings,
-  AboutSettings
+  AboutSettings,
+  AdvancedSettings
 } from './settings'
 import { useVaultStore, useUIStore } from '../stores'
 import {
@@ -26,7 +28,12 @@ import {
   vaultKeys
 } from '../hooks'
 
-export type SettingsSection = 'general' | 'storage' | 'appearance' | 'about'
+export type SettingsSection =
+  | 'general'
+  | 'storage'
+  | 'appearance'
+  | 'advanced'
+  | 'about'
 
 const NAV_ITEMS: {
   id: SettingsSection
@@ -36,6 +43,7 @@ const NAV_ITEMS: {
   { id: 'general', label: 'General', icon: <Settings size={16} /> },
   { id: 'storage', label: 'Storage', icon: <HardDrive size={16} /> },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
+  { id: 'advanced', label: 'Advanced', icon: <Wrench size={16} /> },
   { id: 'about', label: 'About', icon: <Info size={16} /> }
 ]
 
@@ -146,12 +154,14 @@ export function SettingsModal() {
           <DialogTitle className="text-base font-semibold">
             Settings
           </DialogTitle>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={closeSettings}
-            className="p-1.5 rounded-md text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors"
           >
             <X size={16} />
-          </button>
+          </Button>
         </DialogHeader>
 
         <div className="flex min-h-[400px] max-h-[70vh]">
@@ -190,6 +200,7 @@ export function SettingsModal() {
                 vaultName={vaultName}
               />
             )}
+            {activeSection === 'advanced' && <AdvancedSettings />}
             {activeSection === 'about' && (
               <AboutSettings appName={settings.appName} />
             )}

@@ -4,6 +4,7 @@ import { AppSettings } from '../types'
 import { TitleBar } from './TitleBar'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import { VaultCustomization } from './VaultCustomization'
+import { Button } from '@/components/ui/button'
 
 interface VaultSetupProps {
   appSettings: AppSettings
@@ -68,12 +69,9 @@ export function VaultSetup({
                       notes will live here.
                     </p>
                   </div>
-                  <button
-                    onClick={handleSelectVault}
-                    className="w-full bg-brand hover:bg-brand/90 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                  >
+                  <Button className="w-full" size="lg" onClick={handleSelectVault}>
                     Select Vault Folder
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (

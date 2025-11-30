@@ -9,6 +9,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { useVaultStore, useNotebookStore, useUIStore } from '../../stores'
 
 export function EditNotebookModal() {
@@ -98,19 +99,16 @@ export function EditNotebookModal() {
         </div>
 
         <DialogFooter className="px-6 py-4 bg-[#080809] border-t border-border/30 flex-row justify-end gap-3">
-          <button
-            onClick={closeEditModal}
-            className="px-4 py-2 text-sm font-medium text-textMuted hover:text-textMain transition-colors"
-          >
+          <Button variant="ghost" onClick={closeEditModal}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSubmit}
             disabled={!name.trim() || !hasChanges}
-            className="px-5 py-2 text-sm font-semibold rounded-lg bg-amber-500 text-black shadow-lg shadow-amber-500/20 hover:bg-amber-400 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+            className="bg-amber-500 text-black hover:bg-amber-400"
           >
             Save Changes
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -23,6 +23,31 @@ export const extractUrls = (text: string): string[] => {
   return text.match(urlRegex) || [];
 };
 
+// Convert bare URLs in text to markdown links
+// Skips URLs that are already in markdown link syntax [text](url) or <url>
+export const linkifyUrls = (text: string): string => {
+  // Match URLs that are NOT:
+  // - Inside markdown link syntax: [text](url)
+  // - Inside angle brackets: <url>
+  // - Already a markdown link text part
+  return text.replace(
+    /(?<!\]\()(?<!\<)(https?:\/\/[^\s\)>\]]+)(?!\))/g,
+    (match, url) => {
+      // Check if this URL is part of a markdown link by looking at context
+      const index = text.indexOf(match);
+      const before = text.slice(Math.max(0, index - 2), index);
+      const after = text.slice(index + match.length, index + match.length + 1);
+      
+      // Already in markdown link syntax
+      if (before.endsWith('](') || before.endsWith('<') || after === ')') {
+        return match;
+      }
+      
+      return `[${url}](${url})`;
+    }
+  );
+};
+
 // Extract hashtags
 export const extractTags = (text: string): string[] => {
   const tagRegex = /#(\w+)/g;

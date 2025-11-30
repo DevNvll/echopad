@@ -29,3 +29,6 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-global-shortcut = "2"
 base64 = "0.22"
+reqwest = { version = "0.12", features = ["blocking"] }
+scraper = "0.21"
+url = "2"

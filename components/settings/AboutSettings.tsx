@@ -1,4 +1,5 @@
 import { Separator } from '@/components/ui/separator'
+import { Button } from '@/components/ui/button'
 import { useUpdaterStore, UpdateStatus } from '@/stores'
 import {
   RefreshCw,
@@ -134,23 +135,27 @@ export function AboutSettings({ appName }: AboutSettingsProps) {
             <span className="text-sm text-textMuted">Updates</span>
             <div className="flex items-center gap-2">
               {isUpdateAvailable && (
-                <button
+                <Button
+                  size="sm"
                   onClick={downloadAndInstall}
                   disabled={isDownloading}
-                  className="px-3 py-1.5 text-xs font-medium bg-brand text-white rounded-md hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 >
                   <Download size={12} />
                   Install Update
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={checkForUpdates}
                 disabled={!canCheck}
-                className="px-3 py-1.5 text-xs font-medium bg-surface hover:bg-surface/80 text-textMain rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                <RefreshCw size={12} className={isChecking ? 'animate-spin' : ''} />
+                <RefreshCw
+                  size={12}
+                  className={isChecking ? 'animate-spin' : ''}
+                />
                 Check for Updates
-              </button>
+              </Button>
             </div>
           </div>
 

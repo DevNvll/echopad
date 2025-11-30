@@ -12,10 +12,9 @@ compatibility_date = "2024-11-01"
 # Account ID - uncomment and fill in your Cloudflare account ID
 # account_id = "your-account-id"
 
-# Custom domain (optional) - configure in Cloudflare dashboard after deployment
-# routes = [
-#   { pattern = "updates.echopad.app/*", zone_name = "echopad.app" }
-# ]
+routes = [
+  { pattern = "update.echopad.0x48.dev", custom_domain = true, zone_name = "0x48.dev" }
+]
 
 [vars]
 # GitHub repository details

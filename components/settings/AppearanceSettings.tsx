@@ -1,5 +1,6 @@
 import { HexColorPicker, HexColorInput } from 'react-colorful';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { IconPicker, getIconByName } from '@/components/IconPicker';
@@ -135,12 +136,12 @@ export function AppearanceSettings({
         <Separator className="bg-border/50" />
         
         <div className="space-y-2">
-          <button
+          <Button
+            variant="secondary"
             onClick={() => onApplyToAllVaults(accentColor)}
-            className="px-4 py-2 text-sm font-medium bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-textMain rounded-md transition-colors"
           >
             Apply to all vaults
-          </button>
+          </Button>
           <p className="text-xs text-textMuted">
             Set the current accent color for all your vaults
           </p>

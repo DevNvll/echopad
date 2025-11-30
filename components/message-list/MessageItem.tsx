@@ -1,10 +1,11 @@
-import React, { forwardRef } from 'react'
+import React, { forwardRef, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { clsx } from 'clsx'
 import { Note } from '../../types'
 import { LinkPreview } from '../LinkPreview'
 import { EditTextarea } from './EditTextarea'
 import { MessageActions } from './MessageActions'
+import { linkifyUrls } from '../../utils/formatting'
 
 interface MessageItemProps {
   note: Note
@@ -54,6 +55,9 @@ export const MessageItem = React.memo(
         hour12: false
       })
 
+      // Convert bare URLs to clickable markdown links
+      const linkedContent = useMemo(() => linkifyUrls(note.content), [note.content])
+
       return (
         <div
           ref={ref}
@@ -99,7 +103,7 @@ export const MessageItem = React.memo(
                 <>
                   <div className="text-textMain/90 text-[14px] leading-relaxed markdown-content">
                     <ReactMarkdown components={markdownComponents}>
-                      {note.content}
+                      {linkedContent}
                     </ReactMarkdown>
                   </div>
 

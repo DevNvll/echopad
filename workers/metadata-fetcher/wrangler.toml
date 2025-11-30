@@ -1,0 +1,17 @@
+# Echopad Metadata Fetcher - Cloudflare Workers Configuration
+#
+# Deployment:
+# pnpm --filter metadata-fetcher deploy
+
+name = "echopad-metadata-fetcher"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Account ID - uncomment and fill in your Cloudflare account ID
+# account_id = "your-account-id"
+
+# Custom domain - configure in Cloudflare dashboard after deployment
+routes = [
+  { pattern = "metadata.echopad.0x48.dev", custom_domain = true, zone_name = "0x48.dev" }
+]
+

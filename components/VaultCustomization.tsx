@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { IconPicker, getIconByName } from './IconPicker'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 
 const PRESET_COLORS = [
   { name: 'Indigo', value: '#818cf8' },
@@ -15,7 +16,7 @@ const PRESET_COLORS = [
   { name: 'Rose', value: '#fb7185' },
   { name: 'Pink', value: '#f472b6' },
   { name: 'Purple', value: '#a78bfa' },
-  { name: 'Fuchsia', value: '#e879f9' },
+  { name: 'Fuchsia', value: '#e879f9' }
 ]
 
 interface VaultCustomizationProps {
@@ -24,7 +25,11 @@ interface VaultCustomizationProps {
   onSkip: () => void
 }
 
-export function VaultCustomization({ vaultName, onComplete, onSkip }: VaultCustomizationProps) {
+export function VaultCustomization({
+  vaultName,
+  onComplete,
+  onSkip
+}: VaultCustomizationProps) {
   const [selectedIcon, setSelectedIcon] = useState('FolderOpen')
   const [selectedColor, setSelectedColor] = useState('#818cf8')
 
@@ -46,7 +51,8 @@ export function VaultCustomization({ vaultName, onComplete, onSkip }: VaultCusto
         <div>
           <h1 className="text-xl font-bold mb-2">Customize Your Vault</h1>
           <p className="text-textMuted text-sm">
-            Give <span className="font-medium text-textMain">{vaultName}</span> a unique look
+            Give <span className="font-medium text-textMain">{vaultName}</span>{' '}
+            a unique look
           </p>
         </div>
 
@@ -82,23 +88,19 @@ export function VaultCustomization({ vaultName, onComplete, onSkip }: VaultCusto
         </div>
 
         <div className="w-full flex gap-3 pt-2">
-          <button
-            onClick={onSkip}
-            className="flex-1 py-3 px-4 rounded-lg font-medium text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors"
-          >
+          <Button variant="ghost" size="lg" className="flex-1" onClick={onSkip}>
             Skip
-          </button>
-          <button
+          </Button>
+          <Button
+            size="lg"
+            className="flex-1"
             onClick={() => onComplete(selectedIcon, selectedColor)}
-            className="flex-1 py-3 px-4 rounded-lg font-medium text-white transition-colors"
             style={{ backgroundColor: selectedColor }}
           >
             Done
-          </button>
+          </Button>
         </div>
       </div>
     </div>
   )
 }
-
-

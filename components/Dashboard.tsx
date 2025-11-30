@@ -5,7 +5,14 @@ import { RecentNotes } from './dashboard/RecentNotes'
 import { FavoriteNotes } from './dashboard/FavoriteNotes'
 import { PinnedNotebooks } from './dashboard/PinnedNotebooks'
 import { TagCloud } from './dashboard/TagCloud'
-import { useVaultStore, useNotebookStore, useNotesStore, useTagsStore, useUIStore } from '../stores'
+import { Button } from '@/components/ui/button'
+import {
+  useVaultStore,
+  useNotebookStore,
+  useNotesStore,
+  useTagsStore,
+  useUIStore
+} from '../stores'
 
 interface DashboardProps {
   isSidebarCollapsed: boolean
@@ -22,7 +29,15 @@ export function Dashboard({
 }: DashboardProps) {
   const { vaultPath } = useVaultStore()
   const { notebooks, allNotebooks, selectNotebook } = useNotebookStore()
-  const { recentNotes, favoriteNotes, totalNotesCount, loadRecentNotes, loadFavoriteNotes, loadTotalNotesCount, setTarget } = useNotesStore()
+  const {
+    recentNotes,
+    favoriteNotes,
+    totalNotesCount,
+    loadRecentNotes,
+    loadFavoriteNotes,
+    loadTotalNotesCount,
+    setTarget
+  } = useNotesStore()
   const { allTags } = useTagsStore()
   const { openCommand } = useUIStore()
 
@@ -60,13 +75,10 @@ export function Dashboard({
           )}
           <h1 className="text-lg font-semibold text-textMain">Dashboard</h1>
         </div>
-        <button
-          onClick={onCreateNotebook}
-          className="flex items-center gap-2 px-3 py-1.5 bg-brand hover:bg-brand/90 text-white text-sm font-medium rounded-lg transition-colors"
-        >
+        <Button size="sm" onClick={onCreateNotebook}>
           <Plus size={16} strokeWidth={2.5} />
           <span>New Notebook</span>
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -78,10 +90,7 @@ export function Dashboard({
           />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <RecentNotes
-              notes={recentNotes}
-              onNoteClick={handleNoteClick}
-            />
+            <RecentNotes notes={recentNotes} onNoteClick={handleNoteClick} />
 
             <div className="space-y-6">
               <FavoriteNotes
@@ -102,10 +111,8 @@ export function Dashboard({
               />
             </div>
           </div>
-
         </div>
       </div>
     </div>
   )
 }
-

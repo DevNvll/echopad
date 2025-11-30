@@ -1,4 +1,5 @@
 import { Plus, Sparkles, BookOpen } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface NoNotebookSelectedProps {
   onCreateNotebook: () => void
@@ -31,13 +32,10 @@ export function NoNotebookSelected({
             </p>
           </div>
 
-          <button
-            onClick={onCreateNotebook}
-            className="flex items-center gap-2.5 px-5 py-3 bg-brand hover:bg-brand/90 text-white font-semibold rounded-xl transition-colors"
-          >
+          <Button size="lg" onClick={onCreateNotebook}>
             <Plus size={18} strokeWidth={2.5} />
             <span>Create Notebook</span>
-          </button>
+          </Button>
 
           <div className="flex flex-col gap-1.5 mt-2 text-[11px] text-textMuted/40">
             <span>

@@ -1,4 +1,5 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -25,6 +26,16 @@ pub struct NoteFile {
 pub struct NoteMetadata {
     pub filename: String,
     pub created_at: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OgMetadata {
+    pub url: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub image: Option<String>,
+    pub site_name: Option<String>,
+    pub favicon: Option<String>,
 }
 
 fn scan_notebooks_recursive(dir_path: &PathBuf, vault_path: &PathBuf) -> Result<Vec<Notebook>, String> {
@@ -283,6 +294,92 @@ fn save_image(vault_path: String, image_data: String, extension: String) -> Resu
     Ok(format!("attachments/{}", filename))
 }
 
+#[tauri::command]
+fn fetch_og_metadata(url: String) -> Result<OgMetadata, String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    let response = client.get(&url).send().map_err(|e| e.to_string())?;
+    let html_content = response.text().map_err(|e| e.to_string())?;
+    let document = Html::parse_document(&html_content);
+    
+    // Selectors for OG tags
+    let og_title_selector = Selector::parse("meta[property='og:title']").unwrap();
+    let og_desc_selector = Selector::parse("meta[property='og:description']").unwrap();
+    let og_image_selector = Selector::parse("meta[property='og:image']").unwrap();
+    let og_site_selector = Selector::parse("meta[property='og:site_name']").unwrap();
+    let title_selector = Selector::parse("title").unwrap();
+    let desc_selector = Selector::parse("meta[name='description']").unwrap();
+    let favicon_selector = Selector::parse("link[rel='icon'], link[rel='shortcut icon']").unwrap();
+    
+    // Extract OG title or fallback to title tag
+    let title = document
+        .select(&og_title_selector)
+        .next()
+        .and_then(|el| el.value().attr("content").map(String::from))
+        .or_else(|| {
+            document
+                .select(&title_selector)
+                .next()
+                .map(|el| el.text().collect::<String>())
+        });
+    
+    // Extract OG description or fallback to meta description
+    let description = document
+        .select(&og_desc_selector)
+        .next()
+        .and_then(|el| el.value().attr("content").map(String::from))
+        .or_else(|| {
+            document
+                .select(&desc_selector)
+                .next()
+                .and_then(|el| el.value().attr("content").map(String::from))
+        });
+    
+    // Extract OG image
+    let image = document
+        .select(&og_image_selector)
+        .next()
+        .and_then(|el| el.value().attr("content").map(String::from));
+    
+    // Extract site name
+    let site_name = document
+        .select(&og_site_selector)
+        .next()
+        .and_then(|el| el.value().attr("content").map(String::from));
+    
+    // Extract favicon
+    let base_url = url::Url::parse(&url).ok();
+    let favicon = document
+        .select(&favicon_selector)
+        .next()
+        .and_then(|el| el.value().attr("href").map(String::from))
+        .map(|href| {
+            if href.starts_with("http") {
+                href
+            } else if let Some(ref base) = base_url {
+                base.join(&href).map(|u| u.to_string()).unwrap_or(href)
+            } else {
+                href
+            }
+        })
+        .or_else(|| {
+            base_url.map(|u| format!("{}://{}/favicon.ico", u.scheme(), u.host_str().unwrap_or("")))
+        });
+    
+    Ok(OgMetadata {
+        url,
+        title,
+        description,
+        image,
+        site_name,
+        favicon,
+    })
+}
+
 fn show_quick_capture(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("quick-capture") {
         window.show().map_err(|e| e.to_string())?;
@@ -355,6 +452,7 @@ pub fn run() {
             delete_note,
             save_image,
             hide_quick_capture,
+            fetch_og_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

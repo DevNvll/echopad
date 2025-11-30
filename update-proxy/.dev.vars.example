@@ -1,6 +1,0 @@
-# Local development secrets
-# Copy this file to .dev.vars and fill in your GitHub token
-# .dev.vars is gitignored and won't be committed
-
-GITHUB_TOKEN=ghp_your_github_personal_access_token_here
-

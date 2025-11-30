@@ -13,6 +13,7 @@ import {
   DialogFooter,
   DialogDescription
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { useCallback } from 'react'
 import { useVaultStore, useNotebookStore, useUIStore } from '../../stores'
 
@@ -97,18 +98,12 @@ export function DeleteNotebookModal() {
         </div>
 
         <DialogFooter className="px-6 py-4 bg-[#080809] border-t border-border/30 flex-row justify-end gap-3">
-          <button
-            onClick={closeDeleteModal}
-            className="px-4 py-2 text-sm font-medium text-textMuted hover:text-textMain transition-colors"
-          >
+          <Button variant="ghost" onClick={closeDeleteModal}>
             Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-5 py-2 text-sm font-semibold rounded-lg bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all active:scale-[0.98]"
-          >
+          </Button>
+          <Button variant="destructive" onClick={handleSubmit}>
             Delete Notebook
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

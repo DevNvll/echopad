@@ -9,6 +9,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { useVaultStore, useNotebookStore, useUIStore } from '../../stores'
 
 export function CreateNotebookModal() {
@@ -111,19 +112,12 @@ export function CreateNotebookModal() {
         </div>
 
         <DialogFooter className="px-6 py-4 bg-[#080809] border-t border-border/30 flex-row justify-end gap-3">
-          <button
-            onClick={closeCreateModal}
-            className="px-4 py-2 text-sm font-medium text-textMuted hover:text-textMain transition-colors"
-          >
+          <Button variant="ghost" onClick={closeCreateModal}>
             Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!name.trim()}
-            className="px-5 py-2 text-sm font-semibold rounded-lg bg-brand text-white shadow-lg shadow-brand/20 hover:bg-brand/90 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-          >
+          </Button>
+          <Button onClick={handleSubmit} disabled={!name.trim()}>
             Create {isSubnotebook ? 'Subnotebook' : 'Notebook'}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
