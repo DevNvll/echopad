@@ -1,4 +1,5 @@
-import { PanelLeft, PanelLeftClose, ChevronRight, FolderOpen } from 'lucide-react'
+import { PanelLeft, PanelLeftClose, ChevronRight, FolderOpen, PanelRight, PanelRightClose } from 'lucide-react'
+import { useUIStore } from '../stores'
 
 interface NotebookHeaderProps {
   notebookPath?: string
@@ -15,6 +16,7 @@ export function NotebookHeader({
   onToggleSidebar,
   onOpenInExplorer
 }: NotebookHeaderProps) {
+  const { isMediaSheetOpen, toggleMediaSheet } = useUIStore()
   const pathParts = notebookPath?.split('/').filter(Boolean) || []
 
   return (
@@ -67,6 +69,17 @@ export function NotebookHeader({
             <FolderOpen size={16} />
           </button>
         )}
+        <button
+          onClick={toggleMediaSheet}
+          className="p-2 rounded-lg transition-colors text-textMuted/50 hover:text-textMain hover:bg-surfaceHighlight/50"
+          title={isMediaSheetOpen ? 'Hide media panel' : 'Show media panel'}
+        >
+          {isMediaSheetOpen ? (
+            <PanelRightClose size={16} />
+          ) : (
+            <PanelRight size={16} />
+          )}
+        </button>
       </div>
     </div>
   )

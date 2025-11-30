@@ -13,7 +13,7 @@ import {
   isNoteFavorite
 } from '../api'
 
-const PAGE_SIZE = 30
+const PAGE_SIZE = 100
 
 interface NotesState {
   notes: Note[]
@@ -50,10 +50,7 @@ interface NotesState {
     notebookPath: string,
     filename: string
   ) => Promise<void>
-  toggleFavorite: (
-    filename: string,
-    notebookPath: string
-  ) => Promise<boolean>
+  toggleFavorite: (filename: string, notebookPath: string) => Promise<boolean>
   setEditing: (messageId: string | null) => void
   setTarget: (messageId: string | null) => void
   clearTarget: () => void
@@ -77,20 +74,21 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     set({ isLoading: true, currentPage: 0, hasMore: false, allMetadata: [] })
     try {
       const metadata = await listNotes(vaultPath, notebookPath)
-      // Sort by created_at ascending (oldest first), then take latest PAGE_SIZE
-      const sortedMetadata = [...metadata].sort((a, b) => a.createdAt - b.createdAt)
+      const sortedMetadata = [...metadata].sort(
+        (a, b) => a.createdAt - b.createdAt
+      )
       const totalCount = sortedMetadata.length
       const startIndex = Math.max(0, totalCount - PAGE_SIZE)
       const initialMetadata = sortedMetadata.slice(startIndex)
-      
+
       const loadedNotes: Note[] = []
       for (const meta of initialMetadata) {
         const note = await readNote(vaultPath, notebookPath, meta.filename)
         const isFavorite = await isNoteFavorite(meta.filename, notebookPath)
         loadedNotes.push({ ...note, isFavorite })
       }
-      
-      set({ 
+
+      set({
         notes: loadedNotes,
         allMetadata: sortedMetadata,
         currentPage: 1,
@@ -107,7 +105,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   loadMoreNotes: async (vaultPath, notebookPath) => {
     const { allMetadata, currentPage, hasMore, isLoadingMore, notes } = get()
     if (!hasMore || isLoadingMore) return
-    
+
     set({ isLoadingMore: true })
     try {
       const totalCount = allMetadata.length
@@ -115,16 +113,16 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       const endIndex = totalCount - alreadyLoaded
       const startIndex = Math.max(0, endIndex - PAGE_SIZE)
       const nextMetadata = allMetadata.slice(startIndex, endIndex)
-      
+
       const olderNotes: Note[] = []
       for (const meta of nextMetadata) {
         const note = await readNote(vaultPath, notebookPath, meta.filename)
         const isFavorite = await isNoteFavorite(meta.filename, notebookPath)
         olderNotes.push({ ...note, isFavorite })
       }
-      
+
       // Prepend older notes to existing notes
-      set({ 
+      set({
         notes: [...olderNotes, ...notes],
         currentPage: currentPage + 1,
         hasMore: startIndex > 0
@@ -204,7 +202,9 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       ),
       favoriteNotes: isFavorite
         ? state.favoriteNotes
-        : state.favoriteNotes.filter((n) => n.filename !== filename || n.notebookName !== notebookPath)
+        : state.favoriteNotes.filter(
+            (n) => n.filename !== filename || n.notebookName !== notebookPath
+          )
     }))
     return isFavorite
   },
@@ -212,13 +212,13 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   setEditing: (messageId) => set({ editingMessageId: messageId }),
   setTarget: (messageId) => set({ targetMessageId: messageId }),
   clearTarget: () => set({ targetMessageId: null }),
-  clearNotes: () => set({ 
-    notes: [], 
-    isLoading: false, 
-    isLoadingMore: false,
-    allMetadata: [],
-    currentPage: 0,
-    hasMore: false
-  })
+  clearNotes: () =>
+    set({
+      notes: [],
+      isLoading: false,
+      isLoadingMore: false,
+      allMetadata: [],
+      currentPage: 0,
+      hasMore: false
+    })
 }))
-

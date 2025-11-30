@@ -561,3 +561,16 @@ export async function removeNoteFavorite(filename: string, notebookPath: string)
   );
 }
 
+// Get all notes from a specific notebook (unpaginated, for media extraction)
+export async function getAllNotesFromNotebook(vaultPath: string, notebookPath: string): Promise<Note[]> {
+  const noteMetadata = await listNotes(vaultPath, notebookPath);
+  const notes: Note[] = [];
+  
+  for (const meta of noteMetadata) {
+    const note = await readNote(vaultPath, notebookPath, meta.filename);
+    notes.push(note);
+  }
+  
+  return notes.sort((a, b) => b.createdAt - a.createdAt);
+}
+

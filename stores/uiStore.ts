@@ -16,6 +16,8 @@ interface UIState {
   isSettingsOpen: boolean
   settingsSection: SettingsSection
 
+  isMediaSheetOpen: boolean
+
   contextMenu: ContextMenu | null
 
   isCreateModalOpen: boolean
@@ -32,6 +34,10 @@ interface UIState {
   closeSettings: () => void
   toggleSettings: () => void
   setSettingsSection: (section: SettingsSection) => void
+
+  openMediaSheet: () => void
+  closeMediaSheet: () => void
+  toggleMediaSheet: () => void
 
   openContextMenu: (menu: ContextMenu) => void
   closeContextMenu: () => void
@@ -51,6 +57,8 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   isSettingsOpen: false,
   settingsSection: 'general',
+
+  isMediaSheetOpen: false,
 
   contextMenu: null,
 
@@ -78,6 +86,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
   setSettingsSection: (section) => set({ settingsSection: section }),
 
+  openMediaSheet: () => set({ isMediaSheetOpen: true }),
+  closeMediaSheet: () => set({ isMediaSheetOpen: false }),
+  toggleMediaSheet: () =>
+    set((state) => ({ isMediaSheetOpen: !state.isMediaSheetOpen })),
+
   openContextMenu: (menu) => set({ contextMenu: menu }),
   closeContextMenu: () => set({ contextMenu: null }),
 
@@ -97,6 +110,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       isCommandOpen: false,
       commandInitialSearch: '',
       isSettingsOpen: false,
+      isMediaSheetOpen: false,
       isCreateModalOpen: false,
       isEditModalOpen: false,
       isDeleteModalOpen: false,

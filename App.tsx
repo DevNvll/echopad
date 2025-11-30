@@ -20,6 +20,7 @@ import {
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
 import { SettingsModal } from './components/SettingsModal'
+import { MediaSidesheet } from './components/MediaSidesheet'
 import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
@@ -312,6 +313,7 @@ function App() {
 
             <CommandPalette />
             <SettingsModal />
+            <MediaSidesheet />
 
             {contextMenu && (
               <ContextMenu
