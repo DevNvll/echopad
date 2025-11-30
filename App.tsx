@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import { Note, Notebook } from './types'
 import {
   getSetting,
@@ -139,7 +139,7 @@ function App() {
   }, [vaultPath, activeNotebook, loadNotes, clearNotes])
 
   const handleSelectVault = async (): Promise<string | null> => {
-    const selected = await invoke('open', {
+    const selected = await open({
       directory: true,
       multiple: false,
       title: 'Select Vault Folder'
