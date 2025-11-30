@@ -5,7 +5,7 @@ import { Note, NoteMetadata, Notebook, AppSettings } from './types';
 import { extractTags, extractUrls } from './utils/formatting';
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
-  appName: 'Lazuli',
+  appName: 'Echopad',
   accentColor: '#818cf8',
 };
 
@@ -13,7 +13,7 @@ let db: Database | null = null;
 
 async function getDb(): Promise<Database> {
   if (!db) {
-    db = await Database.load('sqlite:lazuli.db');
+    db = await Database.load('sqlite:echopad.db');
     await db.execute(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
