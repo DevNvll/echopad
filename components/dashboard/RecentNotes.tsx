@@ -70,3 +70,4 @@ export function RecentNotes({ notes, onNoteClick }: RecentNotesProps) {
   )
 }
 
+

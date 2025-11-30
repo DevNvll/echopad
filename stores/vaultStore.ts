@@ -86,3 +86,4 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   closeVaultSetup: () => set({ isVaultSetupOpen: false })
 }))
 
+
