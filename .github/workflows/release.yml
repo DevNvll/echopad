@@ -81,6 +81,10 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Update tauri.conf.json version
+        if: github.event_name == 'workflow_dispatch'
+        run: node -e "const fs = require('fs'); const path = 'src-tauri/tauri.conf.json'; const config = JSON.parse(fs.readFileSync(path)); config.version = '${{ needs.create-release.outputs.version }}'; fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
