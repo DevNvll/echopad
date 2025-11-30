@@ -1,5 +1,6 @@
 //! Sync engine - orchestrates the sync process
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -8,7 +9,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::error::{SyncError, SyncResult};
-use super::scanner::{compute_hash, scan_vault, ScanResult};
+use super::scanner::{compute_hash, detect_changes, scan_vault, ChangeSet, ScanResult};
+use super::state::SyncStateManager;
 use super::types::SyncOperationResult;
 
 /// Remote file metadata from server
@@ -68,6 +70,9 @@ pub struct SyncEngine {
     pub access_token: String,
     pub vault_id: String,
     pub vault_path: String,
+    pub state_manager: Option<std::sync::Arc<SyncStateManager>>,
+    /// When true, pull operations will not overwrite existing local files
+    additive_only: bool,
     client: Client,
 }
 
@@ -83,8 +88,35 @@ impl SyncEngine {
             access_token,
             vault_id,
             vault_path,
+            state_manager: None,
+            additive_only: false,
             client: Client::new(),
         }
+    }
+
+    /// Create engine with state manager for incremental sync
+    pub fn with_state_manager(
+        server_url: String,
+        access_token: String,
+        vault_id: String,
+        vault_path: String,
+        state_manager: std::sync::Arc<SyncStateManager>,
+    ) -> Self {
+        Self {
+            server_url,
+            access_token,
+            vault_id,
+            vault_path,
+            state_manager: Some(state_manager),
+            additive_only: false,
+            client: Client::new(),
+        }
+    }
+
+    /// Set additive-only mode for pull operations
+    /// When enabled, existing local files will not be overwritten
+    pub fn set_additive_only(&mut self, additive: bool) {
+        self.additive_only = additive;
     }
 
     /// Perform a full sync cycle
@@ -117,8 +149,13 @@ impl SyncEngine {
             }
         }
 
-        // 3. Push local changes
-        match self.push_changes(&scan_result).await {
+        // 3. Detect local changes (incremental sync if state manager available)
+        let change_set = self.get_local_changes(&scan_result);
+        println!("[Sync] Detected {} changed files, {} deleted files", 
+            change_set.changed.len(), change_set.deleted.len());
+
+        // 4. Push only changed files
+        match self.push_changes_incremental(&change_set, &scan_result).await {
             Ok((uploaded, deleted)) => {
                 files_uploaded = uploaded;
                 files_deleted = deleted;
@@ -143,6 +180,30 @@ impl SyncEngine {
             errors,
             duration_ms,
         })
+    }
+
+    /// Get local changes by comparing with stored state
+    fn get_local_changes(&self, scan_result: &ScanResult) -> ChangeSet {
+        // If we have a state manager, use it for incremental sync
+        if let Some(ref state_manager) = self.state_manager {
+            let file_states = state_manager.get_all_file_states(&self.vault_path);
+            
+            // Build previous state map from stored file states
+            let previous: HashMap<String, String> = file_states
+                .iter()
+                .filter_map(|fs| {
+                    fs.local_hash.as_ref().map(|hash| (fs.relative_path.clone(), hash.clone()))
+                })
+                .collect();
+
+            detect_changes(scan_result, &previous)
+        } else {
+            // No state manager - treat all files as changed (full sync)
+            ChangeSet {
+                changed: scan_result.files.values().cloned().collect(),
+                deleted: vec![],
+            }
+        }
     }
 
     /// Pull remote changes and apply them locally
@@ -212,11 +273,40 @@ impl SyncEngine {
 
         match change.operation.as_str() {
             "delete" => {
+                // In additive-only mode, don't delete local files
+                if self.additive_only {
+                    println!("[Sync] Skipping delete in additive mode: {}", relative_path);
+                    return Ok(());
+                }
+                
                 if local_path.exists() {
                     fs::remove_file(&local_path).map_err(SyncError::Io)?;
                 }
+                // Remove from local state
+                if let Some(ref state_manager) = self.state_manager {
+                    state_manager.remove_file_state(&self.vault_path, &relative_path);
+                }
             }
             "create" | "update" => {
+                // In additive-only mode, skip files that already exist locally
+                if self.additive_only && local_path.exists() {
+                    println!("[Sync] Skipping existing file in additive mode: {}", relative_path);
+                    // Still track the file state so we know it exists on remote
+                    if let Some(ref state_manager) = self.state_manager {
+                        // Read local file and compute hash to track state
+                        if let Ok(local_content) = fs::read(&local_path) {
+                            let local_hash = compute_hash(&local_content);
+                            state_manager.mark_synced(
+                                &self.vault_path,
+                                &relative_path,
+                                &local_hash,
+                                change.version as u32
+                            );
+                        }
+                    }
+                    return Ok(());
+                }
+                
                 // Check if we need to download
                 if let Some(download_url) = &change.download_url {
                     // Build full download URL (server returns relative path)
@@ -243,7 +333,17 @@ impl SyncEngine {
                     }
 
                     // Write file
-                    fs::write(&local_path, content).map_err(SyncError::Io)?;
+                    fs::write(&local_path, &content).map_err(SyncError::Io)?;
+
+                    // Update local state to mark as synced
+                    if let Some(ref state_manager) = self.state_manager {
+                        state_manager.mark_synced(
+                            &self.vault_path, 
+                            &relative_path, 
+                            &hash, 
+                            change.version as u32
+                        );
+                    }
                 }
             }
             _ => {
@@ -283,27 +383,55 @@ impl SyncEngine {
             .map_err(|e| SyncError::Network(e.to_string()))
     }
 
-    /// Push local changes to server
-    async fn push_changes(&self, scan: &ScanResult) -> SyncResult<(u32, u32)> {
+    /// Push local changes to server (incremental - only changed files)
+    async fn push_changes_incremental(&self, change_set: &ChangeSet, _scan: &ScanResult) -> SyncResult<(u32, u32)> {
         let mut uploaded = 0u32;
         let mut deleted = 0u32;
 
-        // Build list of changes to push
+        // Build list of changes to push - only changed and deleted files
         let mut changes = Vec::new();
-        for (path, info) in &scan.files {
+        
+        // Add changed files
+        for info in &change_set.changed {
+            // Get base_version from state manager if available
+            let base_version = self.state_manager.as_ref().and_then(|sm| {
+                sm.get_file_state(&self.vault_path, &info.relative_path)
+                    .and_then(|fs| fs.remote_version)
+            });
+
             changes.push(serde_json::json!({
-                "encrypted_path": encode_path(path),
-                "operation": "update",
+                "encrypted_path": encode_path(&info.relative_path),
+                "operation": if base_version.is_some() { "update" } else { "create" },
                 "content_hash": info.content_hash,
                 "size": info.size_bytes,
                 "modified_at": info.modified_at,
-                "base_version": null
+                "base_version": base_version
+            }));
+        }
+
+        // Add deleted files
+        for path in &change_set.deleted {
+            let base_version = self.state_manager.as_ref().and_then(|sm| {
+                sm.get_file_state(&self.vault_path, path)
+                    .and_then(|fs| fs.remote_version)
+            });
+
+            changes.push(serde_json::json!({
+                "encrypted_path": encode_path(path),
+                "operation": "delete",
+                "content_hash": "",
+                "size": 0,
+                "modified_at": 0,
+                "base_version": base_version
             }));
         }
 
         if changes.is_empty() {
+            println!("[Sync] No changes to push");
             return Ok((0, 0));
         }
+
+        println!("[Sync] Pushing {} changes to server", changes.len());
 
         // Send push request
         let url = format!(
@@ -337,9 +465,10 @@ impl SyncEngine {
         // Process results and upload files
         for result in push_response.results {
             if result.status == "accepted" {
+                let path = decode_path(&result.encrypted_path)?;
+                
                 if let Some(upload_url) = result.upload_url {
-                    // Get the file path from encrypted_path
-                    let path = decode_path(&result.encrypted_path)?;
+                    // This is a create/update operation that needs file upload
                     let vault_path = Path::new(&self.vault_path);
                     let file_path = vault_path.join(&path);
 
@@ -352,6 +481,7 @@ impl SyncEngine {
 
                     // Read and upload file
                     if let Ok(content) = fs::read(&file_path) {
+                        let content_hash = compute_hash(&content);
                         match self.upload_file(&full_upload_url, &content).await {
                             Ok(_) => {
                                 uploaded += 1;
@@ -359,11 +489,23 @@ impl SyncEngine {
                                 if let Some(ref file_id) = result.file_id {
                                     let _ = self.confirm_upload(file_id).await;
                                 }
+                                // Update local state to mark as synced
+                                if let Some(ref state_manager) = self.state_manager {
+                                    let version = result.new_version.unwrap_or(1) as u32;
+                                    state_manager.mark_synced(&self.vault_path, &path, &content_hash, version);
+                                }
                             }
                             Err(e) => {
                                 eprintln!("Upload failed for {}: {}", path, e);
                             }
                         }
+                    }
+                } else {
+                    // This is a delete operation (no upload needed)
+                    deleted += 1;
+                    // Remove from local state
+                    if let Some(ref state_manager) = self.state_manager {
+                        state_manager.remove_file_state(&self.vault_path, &path);
                     }
                 }
             }

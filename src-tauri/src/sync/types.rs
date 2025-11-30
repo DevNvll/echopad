@@ -224,3 +224,36 @@ pub struct EncryptedVaultKey {
     pub key_nonce: String,
 }
 
+/// Vault sync manifest stored in .lazuli-sync.json
+/// This file is stored in the vault root to persist the vault-to-remote mapping
+/// across app reinstalls and to enable automatic reconnection after auth loss.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultSyncManifest {
+    /// Remote vault ID on the sync server
+    pub remote_vault_id: String,
+    /// Server URL where this vault is synced
+    pub server_url: String,
+    /// User ID who owns this vault (for detecting account mismatch)
+    pub user_id: String,
+    /// Timestamp when the vault was first connected
+    pub connected_at: u64,
+}
+
+impl VaultSyncManifest {
+    /// Create a new manifest
+    pub fn new(remote_vault_id: String, server_url: String, user_id: String) -> Self {
+        Self {
+            remote_vault_id,
+            server_url,
+            user_id,
+            connected_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        }
+    }
+}
+
+/// The filename for the sync manifest
+pub const SYNC_MANIFEST_FILENAME: &str = ".lazuli-sync.json";
+

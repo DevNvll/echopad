@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -26,8 +26,8 @@ pub struct VaultWatcher {
     watchers: Arc<RwLock<Vec<WatcherHandle>>>,
     /// Channel sender for file changes
     tx: Sender<FileChange>,
-    /// Channel receiver for file changes
-    rx: Arc<RwLock<Option<Receiver<FileChange>>>>,
+    /// Channel receiver for file changes (uses Mutex since Receiver isn't Sync)
+    rx: Arc<Mutex<Option<Receiver<FileChange>>>>,
     /// Paths to ignore (e.g., .sync-conflict files during resolution)
     ignored_paths: Arc<RwLock<HashSet<PathBuf>>>,
 }
@@ -44,7 +44,7 @@ impl VaultWatcher {
         Self {
             watchers: Arc::new(RwLock::new(Vec::new())),
             tx,
-            rx: Arc::new(RwLock::new(Some(rx))),
+            rx: Arc::new(Mutex::new(Some(rx))),
             ignored_paths: Arc::new(RwLock::new(HashSet::new())),
         }
     }
@@ -144,7 +144,7 @@ impl VaultWatcher {
 
     /// Take the receiver (can only be done once)
     pub fn take_receiver(&self) -> Option<Receiver<FileChange>> {
-        self.rx.write().take()
+        self.rx.lock().take()
     }
 
     /// Add a path to the ignore list

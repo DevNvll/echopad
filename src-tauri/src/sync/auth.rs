@@ -4,10 +4,12 @@
 
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::crypto::{derive_keys, derive_master_key, hash_auth_key, CryptoKey, Salt};
-use super::error::SyncResult;
+use super::error::{SyncError, SyncResult};
 use super::types::{AuthResponse, DeviceType, UserInfo};
 
 /// Authentication state
@@ -32,19 +34,116 @@ pub struct StoredCredentials {
     pub token_nonce: String,
 }
 
+/// Persisted auth data (stored to disk)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedAuth {
+    pub user: UserInfo,
+    pub device_id: String,
+    pub server_url: String,
+    pub refresh_token: String,
+}
+
+const AUTH_FILE_NAME: &str = "sync-auth.json";
+
 /// Authentication manager
 pub struct AuthManager {
     state: Arc<RwLock<Option<AuthState>>>,
     encryption_key: Arc<RwLock<Option<CryptoKey>>>,
+    data_dir: PathBuf,
 }
 
 impl AuthManager {
     /// Create a new auth manager
-    pub fn new() -> Self {
+    pub fn new(data_dir: PathBuf) -> Self {
         Self {
             state: Arc::new(RwLock::new(None)),
             encryption_key: Arc::new(RwLock::new(None)),
+            data_dir,
         }
+    }
+
+    /// Get the path to the auth file
+    fn auth_file_path(&self) -> PathBuf {
+        self.data_dir.join(AUTH_FILE_NAME)
+    }
+
+    /// Save auth state to disk
+    pub fn save_to_disk(&self) -> SyncResult<()> {
+        let state = self.state.read();
+
+        if let Some(auth) = state.as_ref() {
+            let persisted = PersistedAuth {
+                user: auth.user.clone(),
+                device_id: auth.device_id.clone(),
+                server_url: auth.server_url.clone(),
+                refresh_token: auth.refresh_token.clone(),
+            };
+
+            // Ensure data directory exists
+            if !self.data_dir.exists() {
+                fs::create_dir_all(&self.data_dir).map_err(|e| SyncError::Io(e))?;
+            }
+
+            let json = serde_json::to_string_pretty(&persisted)
+                .map_err(|e| SyncError::InvalidData(format!("Failed to serialize auth: {}", e)))?;
+
+            fs::write(self.auth_file_path(), json).map_err(|e| SyncError::Io(e))?;
+        }
+
+        Ok(())
+    }
+
+    /// Load auth state from disk
+    pub fn load_from_disk(&self) -> SyncResult<Option<PersistedAuth>> {
+        let path = self.auth_file_path();
+
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let json = fs::read_to_string(&path).map_err(|e| SyncError::Io(e))?;
+
+        let persisted: PersistedAuth = serde_json::from_str(&json)
+            .map_err(|e| SyncError::InvalidData(format!("Failed to parse auth: {}", e)))?;
+
+        Ok(Some(persisted))
+    }
+
+    /// Clear persisted auth from disk
+    pub fn clear_from_disk(&self) -> SyncResult<()> {
+        let path = self.auth_file_path();
+
+        if path.exists() {
+            fs::remove_file(&path).map_err(|e| SyncError::Io(e))?;
+        }
+
+        Ok(())
+    }
+
+    /// Restore auth state from persisted data (after token refresh)
+    pub fn restore_from_persisted(
+        &self,
+        persisted: &PersistedAuth,
+        access_token: String,
+        new_refresh_token: String,
+        expires_in: u64,
+    ) {
+        let expires_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + expires_in;
+
+        let state = AuthState {
+            user: persisted.user.clone(),
+            device_id: persisted.device_id.clone(),
+            server_url: persisted.server_url.clone(),
+            access_token,
+            refresh_token: new_refresh_token,
+            token_expires_at: expires_at,
+        };
+
+        *self.state.write() = Some(state);
     }
 
     /// Check if user is logged in
@@ -202,11 +301,7 @@ impl AuthManager {
     }
 }
 
-impl Default for AuthManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Note: AuthManager no longer implements Default since it requires a data_dir path
 
 /// Registration data prepared for server
 pub struct RegistrationData {

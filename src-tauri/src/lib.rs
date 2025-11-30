@@ -466,6 +466,7 @@ pub fn run() {
             // Sync commands
             sync::commands::sync_login,
             sync::commands::sync_register,
+            sync::commands::sync_restore_session,
             sync::commands::sync_logout,
             sync::commands::sync_get_status,
             sync::commands::sync_enable_vault,
@@ -479,6 +480,8 @@ pub fn run() {
             sync::commands::sync_is_logged_in,
             sync::commands::sync_list_remote_vaults,
             sync::commands::sync_connect_vault,
+            sync::commands::sync_detect_vault_connection,
+            sync::commands::sync_auto_reconnect_vault,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

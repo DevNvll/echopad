@@ -35,7 +35,8 @@ import {
   useNotesStore,
   useTagsStore,
   useUIStore,
-  useUpdaterStore
+  useUpdaterStore,
+  useSyncStore
 } from './stores'
 
 function App() {
@@ -82,6 +83,12 @@ function App() {
   } = useUIStore()
 
   const { checkForUpdates } = useUpdaterStore()
+
+  const {
+    isLoggedIn: isSyncLoggedIn,
+    restoreSession,
+    autoReconnectVault
+  } = useSyncStore()
 
   const {
     sidebarWidth,
@@ -135,6 +142,19 @@ function App() {
     }, 3000)
     return () => clearTimeout(timer)
   }, [checkForUpdates])
+
+  // Restore sync session on startup
+  useEffect(() => {
+    restoreSession()
+  }, [restoreSession])
+
+  // Auto-reconnect vault sync when session is restored and vault is available
+  useEffect(() => {
+    if (vaultPath && isSyncLoggedIn) {
+      // Try to auto-reconnect this vault if it has a sync manifest
+      autoReconnectVault(vaultPath)
+    }
+  }, [vaultPath, isSyncLoggedIn, autoReconnectVault])
 
   useEffect(() => {
     if (!vaultPath) return

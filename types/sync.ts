@@ -76,3 +76,20 @@ export interface VaultInfo {
   total_size_bytes: number;
 }
 
+/**
+ * Information about a vault's sync connection detected from the manifest file.
+ * Used to auto-reconnect vaults after session restoration.
+ */
+export interface VaultConnectionInfo {
+  /** Remote vault ID from the manifest */
+  remote_vault_id: string;
+  /** Server URL where this vault is synced */
+  server_url: string;
+  /** User ID who owns this vault */
+  user_id: string;
+  /** Whether the current user matches the manifest user */
+  is_same_user: boolean;
+  /** Whether sync is already enabled for this vault in memory */
+  is_already_enabled: boolean;
+}
+

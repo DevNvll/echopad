@@ -11,6 +11,7 @@ import type {
   SyncOperationResult,
   ConflictResolution,
   VaultInfo,
+  VaultConnectionInfo,
 } from '../types/sync'
 
 const STORAGE_KEY = 'echopad-sync-auth'
@@ -27,6 +28,7 @@ interface SyncState {
   serverUrl: string | null
   isLoading: boolean
   error: string | null
+  isRestoring: boolean
 
   // Vault sync state
   vaultStatuses: VaultSyncStatus[]
@@ -48,9 +50,12 @@ interface SyncState {
   setShowLoginModal: (show: boolean) => void
   clearError: () => void
   initializeFromStorage: () => void
+  restoreSession: () => Promise<void>
   updateLastSyncTime: (vaultPath: string) => void
   listRemoteVaults: () => Promise<VaultInfo[]>
   connectVault: (vaultPath: string, remoteVaultId: string) => Promise<void>
+  detectVaultConnection: (vaultPath: string) => Promise<VaultConnectionInfo | null>
+  autoReconnectVault: (vaultPath: string) => Promise<boolean>
 }
 
 // Helper to save auth to localStorage
@@ -86,20 +91,55 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   serverUrl: null,
   isLoading: false,
   error: null,
+  isRestoring: false,
   vaultStatuses: [],
   showLoginModal: false,
 
-  // Initialize from stored auth
+  // Initialize from stored auth (legacy - now just restores session)
   initializeFromStorage: () => {
-    const stored = loadAuthFromStorage()
-    if (stored?.user && stored?.serverUrl) {
-      set({
-        isLoggedIn: true,
-        user: stored.user,
-        serverUrl: stored.serverUrl,
-      })
-      // Refresh status in background
-      get().refreshStatus()
+    // Call restoreSession which properly restores from backend
+    get().restoreSession()
+  },
+  
+  // Restore session from persisted credentials via backend
+  restoreSession: async () => {
+    // Don't restore if already logged in or already restoring
+    if (get().isLoggedIn || get().isRestoring) {
+      return
+    }
+    
+    set({ isRestoring: true })
+    
+    try {
+      interface RestoredSession {
+        user: UserInfo
+        device_id: string
+        server_url: string
+      }
+      
+      const response = await invoke<RestoredSession | null>('sync_restore_session')
+      
+      if (response) {
+        // Session restored successfully
+        saveAuthToStorage(response.user, response.server_url)
+        set({
+          isLoggedIn: true,
+          user: response.user,
+          serverUrl: response.server_url,
+          isRestoring: false,
+        })
+        // Refresh vault statuses
+        await get().refreshStatus()
+      } else {
+        // No stored session - clear any stale localStorage
+        saveAuthToStorage(null, null)
+        set({ isRestoring: false })
+      }
+    } catch (error) {
+      console.error('Failed to restore session:', error)
+      // Clear stale localStorage on error
+      saveAuthToStorage(null, null)
+      set({ isRestoring: false })
     }
   },
 
@@ -298,6 +338,30 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         error: error instanceof Error ? error.message : String(error),
       })
       throw error
+    }
+  },
+
+  detectVaultConnection: async (vaultPath: string) => {
+    try {
+      const info = await invoke<VaultConnectionInfo | null>('sync_detect_vault_connection', { vaultPath })
+      return info
+    } catch (error) {
+      console.error('Failed to detect vault connection:', error)
+      return null
+    }
+  },
+
+  autoReconnectVault: async (vaultPath: string) => {
+    try {
+      const reconnected = await invoke<boolean>('sync_auto_reconnect_vault', { vaultPath })
+      if (reconnected) {
+        console.log('[Sync] Auto-reconnected vault:', vaultPath)
+        await get().refreshStatus()
+      }
+      return reconnected
+    } catch (error) {
+      console.error('Failed to auto-reconnect vault:', error)
+      return false
     }
   },
 }))
