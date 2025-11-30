@@ -5,16 +5,22 @@ import {
   readNote,
   createNote as apiCreateNote,
   updateNote as apiUpdateNote,
-  deleteNote as apiDeleteNote
+  deleteNote as apiDeleteNote,
+  getRecentNotes,
+  getTotalNotesCount
 } from '../api'
 
 interface NotesState {
   notes: Note[]
+  recentNotes: Note[]
+  totalNotesCount: number
   isLoading: boolean
   editingMessageId: string | null
   targetMessageId: string | null
 
   loadNotes: (vaultPath: string, notebookPath: string) => Promise<void>
+  loadRecentNotes: (vaultPath: string) => Promise<void>
+  loadTotalNotesCount: (vaultPath: string) => Promise<void>
   createNote: (
     vaultPath: string,
     notebookPath: string,
@@ -39,6 +45,8 @@ interface NotesState {
 
 export const useNotesStore = create<NotesState>((set, get) => ({
   notes: [],
+  recentNotes: [],
+  totalNotesCount: 0,
   isLoading: false,
   editingMessageId: null,
   targetMessageId: null,
@@ -58,6 +66,26 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       set({ notes: [] })
     } finally {
       set({ isLoading: false })
+    }
+  },
+
+  loadRecentNotes: async (vaultPath) => {
+    try {
+      const recent = await getRecentNotes(vaultPath, 5)
+      set({ recentNotes: recent })
+    } catch (err) {
+      console.error('Failed to load recent notes:', err)
+      set({ recentNotes: [] })
+    }
+  },
+
+  loadTotalNotesCount: async (vaultPath) => {
+    try {
+      const count = await getTotalNotesCount(vaultPath)
+      set({ totalNotesCount: count })
+    } catch (err) {
+      console.error('Failed to load total notes count:', err)
+      set({ totalNotesCount: 0 })
     }
   },
 

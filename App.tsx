@@ -11,6 +11,7 @@ import { Sidebar } from './components/Sidebar'
 import { InputArea } from './components/InputArea'
 import { MessageList } from './components/MessageList'
 import { NoNotebookSelected } from './components/NoNotebookSelected'
+import { Dashboard } from './components/Dashboard'
 import {
   CreateNotebookModal,
   EditNotebookModal,
@@ -19,14 +20,7 @@ import {
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
 import { SettingsModal } from './components/SettingsModal'
-import {
-  Trash2,
-  Edit2,
-  Copy,
-  FolderOpen,
-  FolderPlus,
-  PanelLeft
-} from 'lucide-react'
+import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
 import { SplashScreen } from './components/SplashScreen'
@@ -126,12 +120,6 @@ function App() {
   ])
 
   useEffect(() => {
-    if (isNotebooksLoaded && notebooks.length > 0 && !activeNotebook) {
-      selectNotebook(notebooks[0].relativePath)
-    }
-  }, [notebooks, activeNotebook, isNotebooksLoaded, selectNotebook])
-
-  useEffect(() => {
     if (!vaultPath || !activeNotebook) {
       clearNotes()
       return
@@ -198,6 +186,7 @@ function App() {
   }
 
   const notebook = currentNotebook()
+  const notebookName = notebook?.name || activeNotebook?.split('/').pop()
 
   const isFullyLoaded =
     isInitialized &&
@@ -252,7 +241,7 @@ function App() {
               {activeNotebook ? (
                 <>
                   <NotebookHeader
-                    notebookName={notebook?.name}
+                    notebookName={notebookName}
                     notebookPath={activeNotebook || undefined}
                     noteCount={notes.length}
                     isSidebarCollapsed={isSidebarCollapsed}
@@ -271,24 +260,17 @@ function App() {
                     </div>
                   </div>
                 </>
+              ) : notebooks.length > 0 ? (
+                <Dashboard
+                  isSidebarCollapsed={isSidebarCollapsed}
+                  onToggleSidebar={toggleSidebar}
+                  onCreateNotebook={() => openCreateModal()}
+                  onOpenCommandPalette={() => openCommand()}
+                />
               ) : (
-                <div className="flex-1 flex flex-col min-h-0 bg-[#050505]">
-                  <div className="h-16 border-b border-border/40 flex items-center pl-4 pr-8 bg-glass backdrop-blur-md">
-                    {isSidebarCollapsed && (
-                      <button
-                        onClick={toggleSidebar}
-                        className="p-2 rounded-md text-textMuted/60 hover:text-textMain hover:bg-surfaceHighlight/50 transition-colors"
-                        title="Show sidebar"
-                      >
-                        <PanelLeft size={18} />
-                      </button>
-                    )}
-                  </div>
-                  <NoNotebookSelected
-                    hasNotebooks={notebooks.length > 0}
-                    onCreateNotebook={() => openCreateModal()}
-                  />
-                </div>
+                <NoNotebookSelected
+                  onCreateNotebook={() => openCreateModal()}
+                />
               )}
             </div>
 

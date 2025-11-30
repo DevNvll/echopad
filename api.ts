@@ -356,6 +356,35 @@ export async function saveImage(vaultPath: string, imageData: string, extension:
   });
 }
 
+export async function getTotalNotesCount(vaultPath: string): Promise<number> {
+  const notebooks = await listNotebooks(vaultPath);
+  const flatNotebooks = flattenNotebooks(notebooks);
+  let count = 0;
+  
+  for (const notebook of flatNotebooks) {
+    const noteMetadata = await listNotes(vaultPath, notebook.relativePath);
+    count += noteMetadata.length;
+  }
+  
+  return count;
+}
+
+export async function getRecentNotes(vaultPath: string, limit: number = 5): Promise<Note[]> {
+  const notebooks = await listNotebooks(vaultPath);
+  const flatNotebooks = flattenNotebooks(notebooks);
+  const allNotes: Note[] = [];
+  
+  for (const notebook of flatNotebooks) {
+    const noteMetadata = await listNotes(vaultPath, notebook.relativePath);
+    for (const meta of noteMetadata) {
+      const note = await readNote(vaultPath, notebook.relativePath, meta.filename);
+      allNotes.push(note);
+    }
+  }
+  
+  return allNotes.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+}
+
 export interface TagWithCount {
   tag: string;
   count: number;

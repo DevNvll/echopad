@@ -8,7 +8,8 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
-  Settings
+  Settings,
+  LayoutDashboard
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useVaultStore, useNotebookStore, useUIStore } from '../stores'
@@ -171,8 +172,13 @@ const NotebookTreeItem: React.FC<NotebookTreeItemProps> = ({
 
 export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
   const { vaultPath, switchVault } = useVaultStore()
-  const { notebooks, activeNotebook, selectNotebook, togglePin } =
-    useNotebookStore()
+  const {
+    notebooks,
+    activeNotebook,
+    selectNotebook,
+    togglePin,
+    setActiveNotebook
+  } = useNotebookStore()
   const { openCreateModal, openContextMenu, openSettings } = useUIStore()
 
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false)
@@ -376,6 +382,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4 custom-scrollbar flex flex-col gap-1">
+        <button
+          onClick={() => setActiveNotebook(null)}
+          className={clsx(
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-[14px] group relative font-medium mb-2',
+            activeNotebook === null
+              ? 'bg-surfaceHighlight text-textMain shadow-sm'
+              : 'text-textMuted hover:bg-surfaceHighlight/40 hover:text-textMain/90'
+          )}
+        >
+          <LayoutDashboard
+            size={16}
+            className={clsx(
+              'shrink-0',
+              activeNotebook === null
+                ? 'text-brand'
+                : 'text-textMuted/60 group-hover:text-textMuted'
+            )}
+          />
+          <span className="truncate leading-none flex-1 text-left">
+            Dashboard
+          </span>
+        </button>
+
         {pinnedNotebooks.length > 0 && (
           <div className="mb-3">
             <div className="px-2 pb-2 flex items-center justify-between group mb-1">
