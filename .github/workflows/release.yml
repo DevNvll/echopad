@@ -95,6 +95,26 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Update version in tauri.conf.json
+        shell: bash
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # Use Node.js for cross-platform JSON manipulation
+            node -e "
+              const fs = require('fs');
+              const config = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+              config.version = '$VERSION';
+              fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(config, null, 2) + '\n');
+            "
+          else
+            # Use sed for Linux/macOS
+            sed -i.bak 's/"version": "[^"]*"/"version": "'"$VERSION"'"/' src-tauri/tauri.conf.json
+            rm -f src-tauri/tauri.conf.json.bak
+          fi
+          echo "Updated tauri.conf.json to version $VERSION"
+          cat src-tauri/tauri.conf.json | head -10
+
       - name: Install frontend dependencies
         run: pnpm install
 
@@ -106,6 +126,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          appVersion: ${{ needs.create-release.outputs.version }}
           args: ${{ matrix.args }}
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
