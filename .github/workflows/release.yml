@@ -47,6 +47,7 @@ jobs:
     needs: create-release
     permissions:
       contents: write
+    environment: Release
     strategy:
       fail-fast: false
       matrix:
@@ -85,7 +86,7 @@ jobs:
           version: 9
 
       - name: Install Rust stable
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
@@ -123,4 +124,3 @@ jobs:
               release_id: ${{ needs.create-release.outputs.release_id }},
               draft: false
             })
-
