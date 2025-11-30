@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Note } from '../../types'
 import { formatMessageDate, shouldGroupMessages } from '../../utils/formatting'
 import {
@@ -14,6 +15,15 @@ import { EmptyState } from './EmptyState'
 import { LoadingState, LoadingMoreIndicator } from './LoadingState'
 import { ScrollToBottomButton } from './ScrollToBottomButton'
 import { useMarkdownComponents } from './useMarkdownComponents'
+
+// Flattened item types for virtualization
+type VirtualListItem =
+  | { type: 'date-separator'; label: string; id: string }
+  | { type: 'message'; note: Note; isGrouped: boolean }
+
+// Estimated sizes for virtualization
+const ESTIMATED_MESSAGE_SIZE = 80
+const ESTIMATED_SEPARATOR_SIZE = 40
 
 export const MessageList: React.FC = React.memo(function MessageList() {
   const { vaultPath } = useVaultStore()
@@ -36,13 +46,74 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
   const deleteConfirmIdRef = useRef(deleteConfirmId)
   deleteConfirmIdRef.current = deleteConfirmId
 
+  // Track previous notes count for scroll preservation when loading more
+  const prevNotesCountRef = useRef(0)
+  const isLoadingMoreRef = useRef(false)
+
   const markdownComponents = useMarkdownComponents(vaultPath)
 
+  // Create flattened items array with date separators and messages
+  const flattenedItems = useMemo<VirtualListItem[]>(() => {
+    const items: VirtualListItem[] = []
+
+    notes.forEach((note, index) => {
+      const prevNote = index > 0 ? notes[index - 1] : null
+      const isGrouped = shouldGroupMessages(note.createdAt, prevNote?.createdAt || null)
+      const dateLabel = formatMessageDate(note.createdAt)
+      const isEditing = editingMessageId === note.filename
+
+      // Add date separator if not grouped and not editing
+      if (!isGrouped && !isEditing) {
+        items.push({
+          type: 'date-separator',
+          label: dateLabel,
+          id: `separator-${note.filename}`
+        })
+      }
+
+      // Add the message
+      items.push({
+        type: 'message',
+        note,
+        isGrouped
+      })
+    })
+
+    return items
+  }, [notes, editingMessageId])
+
+  // Create a map of note filename to virtual index for scroll-to-target
+  const noteIndexMap = useMemo(() => {
+    const map = new Map<string, number>()
+    flattenedItems.forEach((item, index) => {
+      if (item.type === 'message') {
+        map.set(item.note.filename, index)
+      }
+    })
+    return map
+  }, [flattenedItems])
+
+  // Initialize virtualizer
+  const virtualizer = useVirtualizer({
+    count: flattenedItems.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => {
+      const item = flattenedItems[index]
+      return item?.type === 'date-separator'
+        ? ESTIMATED_SEPARATOR_SIZE
+        : ESTIMATED_MESSAGE_SIZE
+    },
+    overscan: 5
+  })
+
+  const virtualItems = virtualizer.getVirtualItems()
+
+  // Handle scroll for infinite loading and UI updates
   const handleScroll = useCallback(() => {
     if (deleteConfirmIdRef.current) {
       setDeleteConfirmId(null)
@@ -50,8 +121,7 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     closeContextMenu()
 
     if (scrollContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } =
-        scrollContainerRef.current
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight
       setShowScrollToBottom(distanceFromBottom > 200)
 
@@ -60,31 +130,46 @@ export const MessageList: React.FC = React.memo(function MessageList() {
         scrollTop < 100 &&
         hasMore &&
         !isLoadingMore &&
+        !isLoadingMoreRef.current &&
         vaultPath &&
         activeNotebook
       ) {
-        const prevScrollHeight = scrollHeight
-        loadMoreNotes(vaultPath, activeNotebook).then(() => {
-          // Restore scroll position after loading
-          requestAnimationFrame(() => {
-            if (scrollContainerRef.current) {
-              const newScrollHeight = scrollContainerRef.current.scrollHeight
-              scrollContainerRef.current.scrollTop =
-                newScrollHeight - prevScrollHeight + scrollTop
-            }
-          })
+        isLoadingMoreRef.current = true
+        prevNotesCountRef.current = notes.length
+        loadMoreNotes(vaultPath, activeNotebook).finally(() => {
+          isLoadingMoreRef.current = false
         })
       }
     }
-  }, [
-    closeContextMenu,
-    hasMore,
-    isLoadingMore,
-    vaultPath,
-    activeNotebook,
-    loadMoreNotes
-  ])
+  }, [closeContextMenu, hasMore, isLoadingMore, vaultPath, activeNotebook, loadMoreNotes, notes.length])
 
+  // Scroll position preservation when loading more notes
+  useEffect(() => {
+    if (
+      prevNotesCountRef.current > 0 &&
+      notes.length > prevNotesCountRef.current &&
+      !isLoadingMore
+    ) {
+      // Calculate how many new items were added
+      const newNotesCount = notes.length - prevNotesCountRef.current
+      
+      // Calculate the approximate offset of new items
+      // Each note potentially has a date separator, so estimate conservatively
+      const estimatedNewHeight = newNotesCount * (ESTIMATED_MESSAGE_SIZE + ESTIMATED_SEPARATOR_SIZE / 2)
+      
+      // Adjust scroll position to maintain viewport
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          const currentScroll = scrollContainerRef.current.scrollTop
+          scrollContainerRef.current.scrollTop = currentScroll + estimatedNewHeight
+        }
+      })
+      
+      prevNotesCountRef.current = 0
+    }
+  }, [notes.length, isLoadingMore])
+
+  // Scroll to bottom function - use scrollIntoView on bottom anchor
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'auto' })
   }, [])
@@ -92,12 +177,7 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   const handleEditSubmit = useCallback(
     async (filename: string, newContent: string) => {
       if (!vaultPath || !activeNotebook) return
-      const updated = await updateNote(
-        vaultPath,
-        activeNotebook,
-        filename,
-        newContent
-      )
+      const updated = await updateNote(vaultPath, activeNotebook, filename, newContent)
       await syncNoteTags(updated)
     },
     [vaultPath, activeNotebook, updateNote, syncNoteTags]
@@ -145,8 +225,10 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   useEffect(() => {
     lastNoteRef.current = null
     hasInitialScrolled.current = false
+    prevNotesCountRef.current = 0
   }, [activeNotebook])
 
+  // Scroll to bottom on initial load or when new note is added
   useEffect(() => {
     if (isLoading || notes.length === 0) return
 
@@ -159,31 +241,52 @@ export const MessageList: React.FC = React.memo(function MessageList() {
 
     if (isInitialLoad || isNewNoteAdded) {
       hasInitialScrolled.current = true
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+      
+      // For initial load, wait for virtualizer to render items then scroll
+      // Use multiple attempts with increasing delays to ensure scroll completes
+      const scrollAttempts = isInitialLoad ? [0, 16, 50, 100, 200, 300] : [0, 16]
+      const timeoutIds: number[] = []
+      
+      scrollAttempts.forEach((delay) => {
+        const id = window.setTimeout(() => {
+          scrollToBottom()
+        }, delay)
+        timeoutIds.push(id)
       })
+
+      lastNoteRef.current = currentLastNote
+      
+      return () => {
+        timeoutIds.forEach((id) => window.clearTimeout(id))
+      }
     }
 
     lastNoteRef.current = currentLastNote
-  }, [notes, isLoading])
+  }, [notes, isLoading, scrollToBottom])
 
+  // Scroll to target message when targetMessageId changes
   useEffect(() => {
-    if (isLoading) return
+    if (isLoading || !targetMessageId) return
 
-    if (targetMessageId) {
+    const targetIndex = noteIndexMap.get(targetMessageId)
+    if (targetIndex !== undefined) {
       const timer = setTimeout(() => {
-        const element = document.getElementById(`message-${targetMessageId}`)
-        if (element) {
-          element.scrollIntoView({ behavior: 'auto', block: 'center' })
-          element.classList.add('bg-brand/10', 'ring-1', 'ring-brand/20')
-          setTimeout(() => {
-            element.classList.remove('bg-brand/10', 'ring-1', 'ring-brand/20')
-          }, 2500)
-        }
+        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
+
+        // Highlight the target message after scrolling
+        setTimeout(() => {
+          const element = document.getElementById(`message-${targetMessageId}`)
+          if (element) {
+            element.classList.add('bg-brand/10', 'ring-1', 'ring-brand/20')
+            setTimeout(() => {
+              element.classList.remove('bg-brand/10', 'ring-1', 'ring-brand/20')
+            }, 2500)
+          }
+        }, 100)
       }, 150)
       return () => clearTimeout(timer)
     }
-  }, [targetMessageId, isLoading])
+  }, [targetMessageId, isLoading, noteIndexMap, virtualizer])
 
   if (isLoading) {
     return <LoadingState />
@@ -205,48 +308,80 @@ export const MessageList: React.FC = React.memo(function MessageList() {
         onScroll={handleScroll}
       >
         <div className="grow" />
-        <div className="w-full max-w-3xl mx-auto pb-28 px-6">
+        <div className="w-full max-w-3xl mx-auto px-6 pb-28">
           {isLoadingMore && <LoadingMoreIndicator />}
-          {notes.map((note, index) => {
-            const prevNote = index > 0 ? notes[index - 1] : null
-            const isGrouped = shouldGroupMessages(
-              note.createdAt,
-              prevNote?.createdAt || null
-            )
-            const dateLabel = formatMessageDate(note.createdAt)
-            const isEditing = editingMessageId === note.filename
+          
+          {/* Virtualized list container */}
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              width: '100%',
+              position: 'relative'
+            }}
+          >
+            {virtualItems.map((virtualItem) => {
+              const item = flattenedItems[virtualItem.index]
+              if (!item) return null
 
-            return (
-              <div key={note.filename}>
-                {!isGrouped && !isEditing && (
-                  <DateSeparator label={dateLabel} />
-                )}
+              if (item.type === 'date-separator') {
+                return (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`
+                    }}
+                  >
+                    <DateSeparator label={item.label} />
+                  </div>
+                )
+              }
 
-                <MessageItem
-                  note={note}
-                  isGrouped={isGrouped}
-                  isEditing={isEditing}
-                  copiedMessageId={copiedMessageId}
-                  deleteConfirmId={deleteConfirmId}
-                  markdownComponents={markdownComponents}
-                  onContextMenu={(e) => handleContextMenu(e, note)}
-                  onEdit={() => setEditing(note.filename)}
-                  onEditSubmit={(content) =>
-                    handleEditSubmit(note.filename, content)
-                  }
-                  onEditCancel={() => setEditing(null)}
-                  onCopy={() => handleCopy(note.content, note.filename)}
-                  onDelete={() => setDeleteConfirmId(note.filename)}
-                  onDeleteCancel={() => setDeleteConfirmId(null)}
-                  onDeleteConfirm={() => {
-                    handleDelete(note.filename)
-                    setDeleteConfirmId(null)
+              const { note, isGrouped } = item
+              const isEditing = editingMessageId === note.filename
+
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`
                   }}
-                  onTagClick={handleTagClick}
-                />
-              </div>
-            )
-          })}
+                >
+                  <MessageItem
+                    note={note}
+                    isGrouped={isGrouped}
+                    isEditing={isEditing}
+                    copiedMessageId={copiedMessageId}
+                    deleteConfirmId={deleteConfirmId}
+                    markdownComponents={markdownComponents}
+                    onContextMenu={(e) => handleContextMenu(e, note)}
+                    onEdit={() => setEditing(note.filename)}
+                    onEditSubmit={(content) => handleEditSubmit(note.filename, content)}
+                    onEditCancel={() => setEditing(null)}
+                    onCopy={() => handleCopy(note.content, note.filename)}
+                    onDelete={() => setDeleteConfirmId(note.filename)}
+                    onDeleteCancel={() => setDeleteConfirmId(null)}
+                    onDeleteConfirm={() => {
+                      handleDelete(note.filename)
+                      setDeleteConfirmId(null)
+                    }}
+                    onTagClick={handleTagClick}
+                  />
+                </div>
+              )
+            })}
+          </div>
           <div ref={bottomRef} className="h-px" />
         </div>
       </div>
@@ -255,4 +390,3 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     </div>
   )
 })
-
