@@ -32,6 +32,15 @@ export const InputArea: React.FC = () => {
     }
   }, [content])
 
+  // Listen for focus-input event from keyboard shortcuts
+  useEffect(() => {
+    const handleFocusInput = () => {
+      textareaRef.current?.focus()
+    }
+    window.addEventListener('focus-input', handleFocusInput)
+    return () => window.removeEventListener('focus-input', handleFocusInput)
+  }, [])
+
   const handleSendMessage = async () => {
     if (!vaultPath || !activeNotebook || !content.trim()) return
     const newNote = await createNote(vaultPath, activeNotebook, content)

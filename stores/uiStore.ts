@@ -42,6 +42,7 @@ interface UIState {
   closeEditModal: () => void
   openDeleteModal: (notebook: Notebook) => void
   closeDeleteModal: () => void
+  closeAllModals: () => void
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -65,7 +66,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleCommand: () =>
     set((state) => ({
       isCommandOpen: !state.isCommandOpen,
-      commandInitialSearch: state.isCommandOpen ? '' : state.commandInitialSearch
+      commandInitialSearch: state.isCommandOpen
+        ? ''
+        : state.commandInitialSearch
     })),
 
   openSettings: (section = 'general') =>
@@ -88,6 +91,17 @@ export const useUIStore = create<UIState>((set, get) => ({
   openDeleteModal: (notebook) =>
     set({ isDeleteModalOpen: true, targetNotebook: notebook }),
   closeDeleteModal: () =>
-    set({ isDeleteModalOpen: false, targetNotebook: null })
+    set({ isDeleteModalOpen: false, targetNotebook: null }),
+  closeAllModals: () =>
+    set({
+      isCommandOpen: false,
+      commandInitialSearch: '',
+      isSettingsOpen: false,
+      isCreateModalOpen: false,
+      isEditModalOpen: false,
+      isDeleteModalOpen: false,
+      targetNotebook: null,
+      parentNotebook: null,
+      contextMenu: null
+    })
 }))
-

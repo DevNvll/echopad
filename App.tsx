@@ -65,6 +65,9 @@ function App() {
   const {
     isCommandOpen,
     isSettingsOpen,
+    isCreateModalOpen,
+    isEditModalOpen,
+    isDeleteModalOpen,
     contextMenu,
     openCommand,
     toggleCommand,
@@ -73,7 +76,8 @@ function App() {
     closeContextMenu,
     openCreateModal,
     openEditModal,
-    openDeleteModal
+    openDeleteModal,
+    closeAllModals
   } = useUIStore()
 
   const { checkForUpdates } = useUpdaterStore()
@@ -88,12 +92,25 @@ function App() {
     toggleSidebar
   } = useSidebarResize()
 
+  const isAnyModalOpen =
+    isCreateModalOpen || isEditModalOpen || isDeleteModalOpen
+
+  const focusInput = useCallback(() => {
+    // Dispatch custom event for InputArea to listen to
+    window.dispatchEvent(new CustomEvent('focus-input'))
+  }, [])
+
   useKeyboardShortcuts({
     isCommandOpen,
     isSettingsOpen,
+    isAnyModalOpen,
     onToggleCommand: toggleCommand,
     onToggleSettings: toggleSettings,
-    onOpenSettings: useCallback(() => openSettings('general'), [openSettings])
+    onOpenSettings: useCallback(() => openSettings('general'), [openSettings]),
+    onToggleSidebar: toggleSidebar,
+    onFocusInput: focusInput,
+    onCreateNotebook: useCallback(() => openCreateModal(), [openCreateModal]),
+    onCloseModals: closeAllModals
   })
 
   useEffect(() => {
