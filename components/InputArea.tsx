@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { ArrowUp, ImagePlus } from 'lucide-react'
+import { ArrowUp, ImagePlus, Maximize2, Minimize2 } from 'lucide-react'
 import { saveImage } from '../api'
 import {
   useVaultStore,
@@ -19,18 +19,35 @@ export const InputArea: React.FC = () => {
 
   const [content, setContent] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Auto-resize textarea based on content (only when not expanded)
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && !isExpanded) {
       textareaRef.current.style.height = 'auto'
       textareaRef.current.style.height = `${Math.min(
         textareaRef.current.scrollHeight,
         300
       )}px`
     }
-  }, [content])
+  }, [content, isExpanded])
+
+  // Reset height when toggling expansion
+  useEffect(() => {
+    if (textareaRef.current) {
+      if (isExpanded) {
+        textareaRef.current.style.height = ''
+      } else {
+        textareaRef.current.style.height = 'auto'
+        textareaRef.current.style.height = `${Math.min(
+          textareaRef.current.scrollHeight,
+          300
+        )}px`
+      }
+    }
+  }, [isExpanded])
 
   // Listen for focus-input event from keyboard shortcuts
   useEffect(() => {
@@ -52,6 +69,11 @@ export const InputArea: React.FC = () => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
+    }
+    // Escape to collapse expanded input
+    if (e.key === 'Escape' && isExpanded) {
+      e.preventDefault()
+      setIsExpanded(false)
     }
   }
 
@@ -130,8 +152,10 @@ export const InputArea: React.FC = () => {
 
   return (
     <div className="absolute bottom-0 left-0 right-0 flex justify-center w-full z-20 pointer-events-none">
-      <div className="w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col transition-all overflow-hidden pointer-events-auto focus-within:shadow-[0_0_15px_-5px_color-mix(in_srgb,var(--accent-color)_20%,transparent)] focus-within:border-brand/30">
-        <div className="px-4 pt-4 pb-2">
+      <div
+        className={`w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden pointer-events-auto focus-within:shadow-[0_0_15px_-5px_color-mix(in_srgb,var(--accent-color)_20%,transparent)] focus-within:border-brand/30 transition-all duration-300 ease-out ${isExpanded ? 'h-[60vh]' : ''}`}
+      >
+        <div className={`px-4 pt-4 pb-2 ${isExpanded ? 'flex-1 flex flex-col min-h-0' : ''}`}>
           <textarea
             ref={textareaRef}
             value={content}
@@ -140,7 +164,7 @@ export const InputArea: React.FC = () => {
             onPaste={handlePaste}
             placeholder={`Type your message here...`}
             rows={1}
-            className="w-full bg-transparent text-textMain placeholder-textMuted/40 resize-none outline-none text-[15px] leading-relaxed min-h-[40px] max-h-[300px] overflow-y-auto font-sans custom-scrollbar"
+            className={`w-full bg-transparent text-textMain placeholder-textMuted/40 resize-none outline-none text-[15px] leading-relaxed overflow-y-auto font-sans custom-scrollbar transition-all duration-300 ${isExpanded ? 'flex-1 min-h-0' : 'min-h-[40px] max-h-[300px]'}`}
           />
         </div>
 
@@ -160,6 +184,17 @@ export const InputArea: React.FC = () => {
               title="Add image"
             >
               <ImagePlus size={18} strokeWidth={2} />
+            </button>
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-textMuted hover:text-textMain hover:bg-white/5 transition-all active:scale-95"
+              title={isExpanded ? 'Collapse input' : 'Expand input'}
+            >
+              {isExpanded ? (
+                <Minimize2 size={16} strokeWidth={2} />
+              ) : (
+                <Maximize2 size={16} strokeWidth={2} />
+              )}
             </button>
           </div>
 
