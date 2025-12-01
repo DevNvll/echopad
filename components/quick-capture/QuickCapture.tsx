@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { emit } from '@tauri-apps/api/event'
 import { ArrowUp, Folder } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -153,6 +154,13 @@ export const QuickCapture: React.FC = () => {
       const note = await createNote(vaultPath, selectedNotebook, content.trim())
       await syncNoteTags(note)
       await setQuickCaptureNotebook(selectedNotebook)
+
+      // Emit event to notify main window about the new note
+      await emit('quick-capture-note-created', {
+        vaultPath,
+        notebookPath: selectedNotebook,
+        filename: note.filename
+      })
 
       setShowSuccess(true)
       setContent('')

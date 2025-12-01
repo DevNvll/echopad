@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
+import { listen } from '@tauri-apps/api/event'
 import { Note, Notebook } from './types'
 import {
   getSetting,
@@ -180,6 +181,32 @@ function App() {
       window.removeEventListener('sync-completed', handleSyncCompleted as EventListener)
     }
   }, [vaultPath, activeNotebook, loadNotebooks, loadNotes, loadTags])
+
+  // Listen for quick capture note creation to refresh UI
+  useEffect(() => {
+    const unlisten = listen<{
+      vaultPath: string
+      notebookPath: string
+      filename: string
+    }>('quick-capture-note-created', async (event) => {
+      const { notebookPath } = event.payload
+      
+      // Only refresh if the note was created in the currently active notebook
+      if (vaultPath && activeNotebook === notebookPath) {
+        console.log(`[QuickCapture] Refreshing notes for notebook: ${notebookPath}`)
+        await loadNotes(vaultPath, activeNotebook)
+      }
+      
+      // Also refresh tags in case the note has new tags
+      if (vaultPath) {
+        await loadTags(vaultPath)
+      }
+    })
+
+    return () => {
+      unlisten.then((fn) => fn())
+    }
+  }, [vaultPath, activeNotebook, loadNotes, loadTags])
 
   // Auto-reconnect vault sync when session is restored and vault is available
   useEffect(() => {
