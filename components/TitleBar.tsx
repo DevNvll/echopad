@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, Square, X, Copy, Search, RefreshCw, Cloud, CloudOff, AlertCircle, CheckCircle } from 'lucide-react'
+import { Minus, Square, X, Copy, Search, RefreshCw, Cloud, CloudOff, AlertCircle, CheckCircle, CloudDownload } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSyncStore } from '@/stores/syncStore'
 import { useVaultStore } from '@/stores/vaultStore'
@@ -18,7 +18,7 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   const { settings } = useTheme()
   const appWindow = getCurrentWindow()
   
-  const { isLoggedIn, vaultStatuses, syncNow, refreshStatus } = useSyncStore()
+  const { isLoggedIn, vaultStatuses, syncNow, refreshStatus, remotePendingChanges } = useSyncStore()
   const { vaultPath } = useVaultStore()
 
   // Sync status for current vault
@@ -63,6 +63,7 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   const isSyncing = currentVaultStatus?.status === 'syncing' || isSyncingManual
   const hasError = currentVaultStatus?.status === 'error'
   const pendingChanges = currentVaultStatus?.pending_changes ?? 0
+  const remotePending = remotePendingChanges[vaultPath ?? ''] ?? 0
 
   const handleSyncNow = async () => {
     if (!vaultPath || !isSyncEnabled || isSyncing) return
@@ -82,6 +83,7 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
     if (!isSyncEnabled) return <CloudOff size={14} className="text-textMuted/50" />
     if (isSyncing) return <RefreshCw size={14} className="animate-spin text-accent" />
     if (hasError) return <AlertCircle size={14} className="text-red-400" />
+    if (remotePending > 0) return <CloudDownload size={14} className="text-blue-400" />
     if (pendingChanges > 0) return <Cloud size={14} className="text-amber-400" />
     return <CheckCircle size={14} className="text-green-400" />
   }
@@ -91,7 +93,12 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
     if (!isSyncEnabled) return 'Sync not enabled for this vault'
     if (isSyncing) return 'Syncing...'
     if (hasError) return 'Sync error - click to retry'
-    if (pendingChanges > 0) return `${pendingChanges} pending changes - click to sync`
+    
+    const parts: string[] = []
+    if (pendingChanges > 0) parts.push(`${pendingChanges} local`)
+    if (remotePending > 0) parts.push(`${remotePending} remote`)
+    
+    if (parts.length > 0) return `${parts.join(', ')} changes - click to sync`
     return 'All synced - click to sync now'
   }
 
@@ -137,6 +144,9 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
           {getSyncIcon()}
           {pendingChanges > 0 && isSyncEnabled && !isSyncing && (
             <span className="absolute top-1.5 ml-4 w-2 h-2 bg-amber-400 rounded-full" />
+          )}
+          {remotePending > 0 && pendingChanges === 0 && isSyncEnabled && !isSyncing && (
+            <span className="absolute top-1.5 ml-4 w-2 h-2 bg-blue-400 rounded-full" />
           )}
         </button>
 

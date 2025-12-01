@@ -567,6 +567,74 @@ export async function confirmUpload(
 }
 
 /**
+ * Check for pending remote changes without downloading them
+ * This is a lightweight endpoint for polling upstream changes
+ */
+export async function checkPendingChanges(
+  request: Request,
+  env: Env,
+  userId: string,
+  vaultId: string
+): Promise<Response> {
+  // Verify vault ownership
+  const vault = await env.DB
+    .prepare('SELECT id FROM vaults WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
+    .bind(vaultId, userId)
+    .first<Vault>();
+
+  if (!vault) {
+    return new Response(JSON.stringify({ error: 'Vault not found', code: 'VAULT_NOT_FOUND' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  let body: { cursor?: string };
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+
+  const { cursor } = body;
+  let count = 0;
+
+  if (cursor) {
+    const parsed = parseCursor(cursor);
+    if (!parsed) {
+      return new Response(JSON.stringify({ error: 'Invalid cursor', code: 'INVALID_CURSOR' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Count changes after cursor
+    const result = await env.DB
+      .prepare(`
+        SELECT COUNT(*) as count FROM vault_files 
+        WHERE vault_id = ? AND (updated_at > ? OR (updated_at = ? AND id > ?))
+      `)
+      .bind(vaultId, parsed.updatedAt, parsed.updatedAt, parsed.id)
+      .first<{ count: number }>();
+    
+    count = result?.count ?? 0;
+  } else {
+    // No cursor = count all files (first sync)
+    const result = await env.DB
+      .prepare('SELECT COUNT(*) as count FROM vault_files WHERE vault_id = ? AND deleted_at IS NULL')
+      .bind(vaultId)
+      .first<{ count: number }>();
+    
+    count = result?.count ?? 0;
+  }
+
+  return new Response(JSON.stringify({ pending_changes: count }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/**
  * Get sync status for a vault
  */
 export async function getSyncStatus(

@@ -21,7 +21,13 @@ import {
   putVaultKey
 } from './routes/vaults'
 // Sync routes
-import { pull, push, confirmUpload, getSyncStatus } from './routes/sync'
+import {
+  pull,
+  push,
+  confirmUpload,
+  getSyncStatus,
+  checkPendingChanges
+} from './routes/sync'
 // File routes
 import { uploadFile, downloadFile, deleteFile } from './routes/files'
 // Account routes
@@ -269,6 +275,12 @@ export default {
         // GET /api/v1/vaults/:id/sync/status
         if (method === 'GET' && subPath === '/sync/status') {
           response = await getSyncStatus(request, env, userId, vaultId)
+          return addCorsHeaders(response, origin)
+        }
+
+        // POST /api/v1/vaults/:id/sync/pending
+        if (method === 'POST' && subPath === '/sync/pending') {
+          response = await checkPendingChanges(request, env, userId, vaultId)
           return addCorsHeaders(response, origin)
         }
 

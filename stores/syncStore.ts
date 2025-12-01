@@ -33,6 +33,9 @@ interface SyncState {
   // Vault sync state
   vaultStatuses: VaultSyncStatus[]
   
+  // Remote pending changes per vault (vault_path -> count)
+  remotePendingChanges: Record<string, number>
+  
   // UI state
   showLoginModal: boolean
   
@@ -40,6 +43,7 @@ interface SyncState {
   login: (email: string, password: string, serverUrl: string) => Promise<void>
   logout: () => Promise<void>
   refreshStatus: () => Promise<void>
+  checkRemotePending: (vaultPath: string) => Promise<number>
   enableVaultSync: (vaultPath: string, vaultName: string) => Promise<string>
   disableVaultSync: (vaultPath: string) => Promise<void>
   syncNow: (vaultPath: string) => Promise<SyncOperationResult>
@@ -93,6 +97,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   error: null,
   isRestoring: false,
   vaultStatuses: [],
+  remotePendingChanges: {},
   showLoginModal: false,
 
   // Initialize from stored auth (legacy - now just restores session)
@@ -202,8 +207,32 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         vaultStatuses: status.vaults,
         error: status.last_error,
       })
+      
+      // Check remote pending for enabled vaults
+      for (const vault of status.vaults) {
+        if (vault.enabled) {
+          // Fire and forget - don't block on this
+          get().checkRemotePending(vault.vault_path).catch(() => {})
+        }
+      }
     } catch (error) {
       console.error('Failed to refresh sync status:', error)
+    }
+  },
+
+  checkRemotePending: async (vaultPath: string) => {
+    try {
+      const count = await invoke<number>('sync_check_remote_pending', { vaultPath })
+      set((state) => ({
+        remotePendingChanges: {
+          ...state.remotePendingChanges,
+          [vaultPath]: count,
+        },
+      }))
+      return count
+    } catch (error) {
+      console.error('Failed to check remote pending:', error)
+      return 0
     }
   },
 
@@ -244,6 +273,14 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       
       // Update last sync time locally
       get().updateLastSyncTime(vaultPath)
+      
+      // Clear remote pending count since we just synced
+      set((state) => ({
+        remotePendingChanges: {
+          ...state.remotePendingChanges,
+          [vaultPath]: 0,
+        },
+      }))
       
       await get().refreshStatus()
       

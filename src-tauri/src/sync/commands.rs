@@ -631,6 +631,57 @@ pub async fn sync_detect_vault_connection(
     }))
 }
 
+/// Check for pending remote changes without downloading them
+/// Returns the count of changes available on the server since last sync
+#[tauri::command]
+pub async fn sync_check_remote_pending(
+    state: State<'_, SyncState>,
+    vault_path: String,
+) -> Result<u32, String> {
+    let vault_state = state.state_manager.get_vault_state(&vault_path)
+        .ok_or("Vault not found")?;
+
+    if !vault_state.enabled {
+        return Ok(0);
+    }
+
+    let vault_id = vault_state.vault_id;
+    let server_url = state.auth.get_server_url()
+        .ok_or("Not logged in")?;
+    let access_token = state.auth.get_access_token()
+        .ok_or("No access token")?;
+
+    // Get current cursor from state manager
+    let cursor = state.state_manager.get_cursor_by_id(&vault_id);
+
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/v1/vaults/{}/sync/pending", server_url, vault_id);
+
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .json(&serde_json::json!({ "cursor": cursor }))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to check pending: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Failed to check pending changes: {} - {}", status, text));
+    }
+
+    #[derive(serde::Deserialize)]
+    struct PendingResponse {
+        pending_changes: u32,
+    }
+
+    let result: PendingResponse = response.json().await
+        .map_err(|e| format!("Invalid response: {}", e))?;
+
+    Ok(result.pending_changes)
+}
+
 /// Auto-reconnect a vault using its manifest
 /// This should be called after session restore if a manifest is detected.
 /// 

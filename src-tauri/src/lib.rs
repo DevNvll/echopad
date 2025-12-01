@@ -485,6 +485,7 @@ pub fn run() {
             sync::commands::sync_connect_vault,
             sync::commands::sync_detect_vault_connection,
             sync::commands::sync_auto_reconnect_vault,
+            sync::commands::sync_check_remote_pending,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
