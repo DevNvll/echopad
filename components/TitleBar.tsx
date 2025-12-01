@@ -108,7 +108,7 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
     <div className="h-9 flex items-center justify-between bg-sidebar border-b border-border/40 select-none rounded-t-lg">
       <div
         data-tauri-drag-region
-        className="w-36 h-full flex items-center px-4 cursor-default shrink-0"
+        className="w-60 h-full flex items-center px-4 cursor-default shrink-0"
       >
         <span className="text-xs font-medium text-textMuted tracking-wide">
           {settings.appName.toLowerCase()}
