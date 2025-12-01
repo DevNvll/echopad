@@ -15,6 +15,26 @@ on:
           - major
           - patch
         default: patch
+      build_windows:
+        description: 'Build for Windows'
+        required: false
+        type: boolean
+        default: true
+      build_macos_arm:
+        description: 'Build for macOS (Apple Silicon)'
+        required: false
+        type: boolean
+        default: false
+      build_macos_intel:
+        description: 'Build for macOS (Intel)'
+        required: false
+        type: boolean
+        default: false
+      build_linux:
+        description: 'Build for Linux'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   create-release:
@@ -99,23 +119,56 @@ jobs:
             });
             return data.id
 
-  build-tauri:
+  prepare-matrix:
     needs: create-release
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_targets: ${{ steps.set-matrix.outputs.has_targets }}
+    steps:
+      - name: Set build matrix
+        id: set-matrix
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const includes = [];
+
+            // For tag pushes, build all platforms (or just windows if you prefer)
+            const isDispatch = context.eventName === 'workflow_dispatch';
+            const inputs = context.payload.inputs || {};
+
+            const buildWindows = isDispatch ? inputs.build_windows === 'true' : true;
+            const buildMacosArm = isDispatch ? inputs.build_macos_arm === 'true' : false;
+            const buildMacosIntel = isDispatch ? inputs.build_macos_intel === 'true' : false;
+            const buildLinux = isDispatch ? inputs.build_linux === 'true' : false;
+
+            if (buildWindows) {
+              includes.push({ platform: 'windows-latest', args: '' });
+            }
+            if (buildMacosArm) {
+              includes.push({ platform: 'macos-latest', args: '--target aarch64-apple-darwin' });
+            }
+            if (buildMacosIntel) {
+              includes.push({ platform: 'macos-latest', args: '--target x86_64-apple-darwin' });
+            }
+            if (buildLinux) {
+              includes.push({ platform: 'ubuntu-22.04', args: '' });
+            }
+
+            const matrix = { include: includes };
+            core.setOutput('matrix', JSON.stringify(matrix));
+            core.setOutput('has_targets', includes.length > 0 ? 'true' : 'false');
+            console.log('Build matrix:', JSON.stringify(matrix, null, 2));
+
+  build-tauri:
+    needs: [create-release, prepare-matrix]
+    if: needs.prepare-matrix.outputs.has_targets == 'true'
     permissions:
       contents: write
     environment: Release
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # - platform: 'macos-latest'
-          #   args: '--target aarch64-apple-darwin'
-          # - platform: 'macos-latest'
-          #   args: '--target x86_64-apple-darwin'
-          # - platform: 'ubuntu-22.04'
-          #   args: ''
-          - platform: 'windows-latest'
-            args: ''
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -170,7 +223,8 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    needs: [create-release, build-tauri]
+    needs: [create-release, prepare-matrix, build-tauri]
+    if: always() && needs.build-tauri.result == 'success'
 
     steps:
       - name: Publish release
