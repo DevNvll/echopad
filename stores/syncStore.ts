@@ -246,6 +246,19 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       get().updateLastSyncTime(vaultPath)
       
       await get().refreshStatus()
+      
+      // Dispatch event to trigger UI refresh if files were downloaded or uploaded
+      if (result.files_downloaded > 0 || result.files_uploaded > 0 || result.files_deleted > 0) {
+        window.dispatchEvent(new CustomEvent('sync-completed', { 
+          detail: { 
+            vaultPath,
+            filesDownloaded: result.files_downloaded,
+            filesUploaded: result.files_uploaded,
+            filesDeleted: result.files_deleted
+          } 
+        }))
+      }
+      
       return result
     } catch (error) {
       set({
@@ -332,6 +345,16 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       await invoke('sync_connect_vault', { vaultPath, remoteVaultId })
       await get().refreshStatus()
       set({ isLoading: false })
+      
+      // Dispatch event to trigger UI refresh since files were likely downloaded
+      window.dispatchEvent(new CustomEvent('sync-completed', { 
+        detail: { 
+          vaultPath,
+          filesDownloaded: 1, // Indicate that files may have been downloaded
+          filesUploaded: 0,
+          filesDeleted: 0
+        } 
+      }))
     } catch (error) {
       set({
         isLoading: false,

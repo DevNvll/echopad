@@ -138,9 +138,9 @@ impl SyncEngine {
         println!("[Sync] Server URL: {}", self.server_url);
         println!("[Sync] Vault ID: {}", self.vault_id);
 
-        // 1. Scan local files
-        let scan_result = scan_vault(vault_path)?;
-        println!("[Sync] Found {} local files", scan_result.file_count);
+        // 1. Initial scan to know what we have locally before sync
+        let initial_scan = scan_vault(vault_path)?;
+        println!("[Sync] Found {} local files before pull", initial_scan.file_count);
         
         // 2. Pull remote changes first
         match self.pull_changes(vault_path).await {
@@ -154,7 +154,13 @@ impl SyncEngine {
             }
         }
 
-        // 3. Detect local changes (incremental sync if state manager available)
+        // 3. Re-scan AFTER pulling to include downloaded files
+        // This is critical - we need to detect changes based on current state,
+        // not the state before pulling (which would cause downloaded files to be "deleted")
+        let scan_result = scan_vault(vault_path)?;
+        println!("[Sync] Found {} local files after pull", scan_result.file_count);
+
+        // 4. Detect local changes (incremental sync if state manager available)
         let change_set = self.get_local_changes(&scan_result);
         println!("[Sync] Detected {} changed files, {} deleted files", 
             change_set.changed.len(), change_set.deleted.len());
@@ -167,7 +173,7 @@ impl SyncEngine {
             println!("[Sync]   ... and {} more changed files", change_set.changed.len() - 5);
         }
 
-        // 4. Push only changed files
+        // 5. Push only changed files
         match self.push_changes_incremental(&change_set, &scan_result).await {
             Ok((uploaded, deleted)) => {
                 files_uploaded = uploaded;

@@ -148,6 +148,39 @@ function App() {
     restoreSession()
   }, [restoreSession])
 
+  // Listen for sync completion to refresh UI
+  useEffect(() => {
+    const handleSyncCompleted = async (event: CustomEvent<{ 
+      vaultPath: string
+      filesDownloaded: number
+      filesUploaded: number
+      filesDeleted: number 
+    }>) => {
+      const { filesDownloaded, filesDeleted } = event.detail
+      
+      // Only refresh if files were downloaded or deleted (changes from remote)
+      if ((filesDownloaded > 0 || filesDeleted > 0) && vaultPath) {
+        console.log(`[Sync] Refreshing UI after sync: ${filesDownloaded} downloaded, ${filesDeleted} deleted`)
+        
+        // Refresh notebooks (new notebooks may have been synced)
+        await loadNotebooks(vaultPath)
+        
+        // Refresh notes for current notebook if one is selected
+        if (activeNotebook) {
+          await loadNotes(vaultPath, activeNotebook)
+        }
+        
+        // Refresh tags
+        await loadTags(vaultPath)
+      }
+    }
+
+    window.addEventListener('sync-completed', handleSyncCompleted as EventListener)
+    return () => {
+      window.removeEventListener('sync-completed', handleSyncCompleted as EventListener)
+    }
+  }, [vaultPath, activeNotebook, loadNotebooks, loadNotes, loadTags])
+
   // Auto-reconnect vault sync when session is restored and vault is available
   useEffect(() => {
     if (vaultPath && isSyncLoggedIn) {
