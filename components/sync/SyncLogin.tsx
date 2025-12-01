@@ -44,7 +44,7 @@ export function SyncLogin({ onClose, onSuccess }: SyncLoginProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-xl bg-[#0a0a0a] border border-[#222] shadow-2xl">
+      <div className="w-full max-w-md rounded-xl bg-surface border border-[#222] shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#222]">
           <div className="flex items-center gap-3">
@@ -83,6 +83,7 @@ export function SyncLogin({ onClose, onSuccess }: SyncLoginProps) {
               placeholder="you@example.com"
               className="w-full px-3 py-2 rounded-lg bg-[#141414] border border-[#333] text-white placeholder:text-neutral-500 focus:outline-none focus:border-brand transition-colors"
               autoFocus
+              autoComplete="off"
             />
           </div>
 
@@ -101,7 +102,11 @@ export function SyncLogin({ onClose, onSuccess }: SyncLoginProps) {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -147,7 +152,8 @@ export function SyncLogin({ onClose, onSuccess }: SyncLoginProps) {
         {/* Footer */}
         <div className="px-4 py-3 border-t border-[#222] bg-[#080808] rounded-b-xl">
           <p className="text-xs text-neutral-500 text-center">
-            Your data is encrypted before leaving your device. We can never read your notes.
+            Your data is encrypted before leaving your device. We can never read
+            your notes.
           </p>
         </div>
       </div>

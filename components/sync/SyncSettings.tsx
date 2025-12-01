@@ -6,7 +6,7 @@ import {
   Monitor,
   LogOut,
   AlertCircle,
-  ChevronRight,
+  ChevronRight
 } from 'lucide-react'
 import { useSyncStore } from '../../stores/syncStore'
 import { useVaultStore } from '../../stores/vaultStore'
@@ -27,7 +27,7 @@ export function SyncSettings() {
     logout,
     refreshStatus,
     clearError,
-    initializeFromStorage,
+    initializeFromStorage
   } = useSyncStore()
 
   const { vaultPath } = useVaultStore()
@@ -76,7 +76,9 @@ export function SyncSettings() {
           </button>
         </div>
 
-        {showLoginModal && <SyncLogin onClose={() => setShowLoginModal(false)} />}
+        {showLoginModal && (
+          <SyncLogin onClose={() => setShowLoginModal(false)} />
+        )}
       </div>
     )
   }
@@ -106,7 +108,8 @@ export function SyncSettings() {
           <div className="flex items-center justify-between text-sm">
             <span className="text-textMuted">Storage</span>
             <span className="text-textMain">
-              {formatBytes(user?.storage_used_bytes || 0)} / {formatBytes(user?.storage_quota_bytes || 0)}
+              {formatBytes(user?.storage_used_bytes || 0)} /{' '}
+              {formatBytes(user?.storage_quota_bytes || 0)}
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-surface overflow-hidden">
@@ -142,7 +145,9 @@ export function SyncSettings() {
             disabled={isLoading}
             className="p-1.5 rounded-lg text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
+            />
           </button>
         </div>
 

@@ -1,5 +1,6 @@
-import { Bug, Terminal, Power, Copy, Check } from 'lucide-react'
+import { Bug, Terminal, Power, Copy, Check, MonitorCog } from 'lucide-react'
 import { useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useDevMode } from '@/hooks'
@@ -41,6 +42,26 @@ export function DevSettings() {
           </div>
         </div>
       </div>
+
+      {/* Developer Tools */}
+      <div className="space-y-3">
+        <h4 className="text-xs font-medium text-textMuted uppercase tracking-wider">
+          Tools
+        </h4>
+        <Button
+          variant="outline"
+          onClick={() => invoke('open_devtools')}
+          className="w-full border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-400"
+        >
+          <MonitorCog size={14} />
+          Open DevTools
+        </Button>
+        <p className="text-xs text-textMuted">
+          Opens the browser developer tools for inspecting elements, debugging, and viewing console logs
+        </p>
+      </div>
+
+      <Separator className="bg-border/50" />
 
       {/* Environment Info */}
       <div className="space-y-3 overflow-hidden">

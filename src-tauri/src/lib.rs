@@ -420,6 +420,14 @@ fn hide_quick_capture(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_devtools(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.open_devtools();
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -466,6 +474,7 @@ pub fn run() {
             save_image,
             hide_quick_capture,
             fetch_og_metadata,
+            open_devtools,
             // Sync commands
             sync::commands::sync_login,
             sync::commands::sync_register,
