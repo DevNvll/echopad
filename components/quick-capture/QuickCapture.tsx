@@ -13,6 +13,8 @@ import {
   getVaultAccentColor
 } from '../../api'
 import { Notebook } from '../../types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 export const QuickCapture: React.FC = () => {
   const [content, setContent] = useState('')
@@ -230,36 +232,30 @@ export const QuickCapture: React.FC = () => {
         <div className="w-px h-5 bg-border/60" />
 
         {/* Input */}
-        <input
+        <Input
           ref={inputRef}
           type="text"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Quick note... (Tab to change notebook)"
           disabled={isSaving}
-          autoComplete="off"
-          className={clsx(
-            'flex-1 bg-transparent text-textMain text-sm h-full',
-            'placeholder-textMuted/40',
-            'focus:outline-none',
-            'disabled:opacity-50'
-          )}
+          className="flex-1 bg-transparent text-textMain text-sm h-full border-0 shadow-none focus-visible:ring-0 placeholder:text-textMuted/40"
         />
 
         {/* Save button */}
-        <button
+        <Button
+          size="icon"
           onClick={handleSave}
           disabled={!content.trim() || isSaving || !selectedNotebook}
           className={clsx(
-            'flex items-center justify-center w-7 h-7 rounded-lg transition-all shrink-0',
-            'disabled:opacity-20 disabled:cursor-not-allowed',
+            'w-7 h-7 shrink-0 active:scale-95',
             showSuccess
-              ? 'bg-green-500 text-white'
-              : 'bg-brand text-background hover:opacity-90 active:scale-95'
+              ? 'bg-green-500 text-white hover:bg-green-500'
+              : 'bg-brand text-background hover:opacity-90'
           )}
         >
           <ArrowUp size={14} strokeWidth={2.5} />
-        </button>
+        </Button>
       </div>
     </div>
   )

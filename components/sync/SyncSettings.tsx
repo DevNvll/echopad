@@ -13,6 +13,7 @@ import { useVaultStore } from '../../stores/vaultStore'
 import { SyncLogin } from './SyncLogin'
 import { DeviceManager } from './DeviceManager'
 import { VaultSyncToggle } from './VaultSyncToggle'
+import { Button } from '@/components/ui/button'
 
 export function SyncSettings() {
   const [showDevices, setShowDevices] = useState(false)
@@ -68,12 +69,9 @@ export function SyncSettings() {
           <p className="text-sm text-textMuted mb-6 max-w-sm mx-auto">
             Sign in to sync your notes across devices.
           </p>
-          <button
-            onClick={() => setShowLoginModal(true)}
-            className="px-6 py-2.5 rounded-lg bg-brand text-white font-medium hover:opacity-90 transition-opacity"
-          >
+          <Button onClick={() => setShowLoginModal(true)}>
             Sign in to Sync
-          </button>
+          </Button>
         </div>
 
         {showLoginModal && (
@@ -94,13 +92,15 @@ export function SyncSettings() {
             </div>
             <p className="font-medium text-textMain">{user?.email}</p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={logout}
-            className="p-2 rounded-lg text-textMuted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            className="text-textMuted hover:text-red-400 hover:bg-red-500/10"
             title="Sign out"
           >
             <LogOut className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Storage usage */}
@@ -123,15 +123,16 @@ export function SyncSettings() {
 
       {error && (
         <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-400">{error}</p>
-            <button
+            <Button
+              variant="link"
               onClick={clearError}
-              className="text-xs text-red-400/70 hover:text-red-400 mt-1"
+              className="h-auto p-0 text-xs text-red-400/70 hover:text-red-400 mt-1"
             >
               Dismiss
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -140,15 +141,17 @@ export function SyncSettings() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-sm font-medium text-textMuted">Vault Sync</h4>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => refreshStatus()}
             disabled={isLoading}
-            className="p-1.5 rounded-lg text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors disabled:opacity-50"
+            className="h-8 w-8 text-textMuted hover:text-textMain"
           >
             <RefreshCw
               className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
             />
-          </button>
+          </Button>
         </div>
 
         {vaultPath && (
@@ -168,9 +171,10 @@ export function SyncSettings() {
 
       {/* Devices */}
       <div>
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setShowDevices(!showDevices)}
-          className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-surfaceHighlight transition-colors"
+          className="w-full flex items-center justify-between p-3 h-auto hover:bg-surfaceHighlight"
         >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-surfaceHighlight">
@@ -183,7 +187,7 @@ export function SyncSettings() {
               showDevices ? 'rotate-90' : ''
             }`}
           />
-        </button>
+        </Button>
 
         {showDevices && <DeviceManager />}
       </div>

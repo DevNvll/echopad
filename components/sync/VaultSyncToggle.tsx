@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Loader2, RefreshCw, AlertCircle, CheckCircle, CloudOff, Copy } from 'lucide-react'
 import { useSyncStore } from '../../stores/syncStore'
 import { useDevMode } from '../../hooks'
+import { Button } from '@/components/ui/button'
 import type { VaultSyncStatus } from '../../types/sync'
 
 interface VaultSyncToggleProps {
@@ -110,14 +111,16 @@ export function VaultSyncToggle({ vaultPath, vaultName, status }: VaultSyncToggl
 
         <div className="flex items-center gap-2">
           {isEnabled && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleSyncNow}
               disabled={isSyncing || syncStatus === 'syncing'}
-              className="p-2 rounded-lg text-textMuted hover:text-textMain hover:bg-surface transition-colors disabled:opacity-50"
+              className="h-9 w-9 text-textMuted hover:text-textMain"
               title="Sync now"
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            </button>
+            </Button>
           )}
 
           {/* Toggle switch */}
@@ -138,9 +141,10 @@ export function VaultSyncToggle({ vaultPath, vaultName, status }: VaultSyncToggl
 
       {/* Dev mode: Show vault ID */}
       {isDevMode && vaultId && (
-        <button
+        <Button
+          variant="ghost"
           onClick={copyVaultId}
-          className="mt-3 flex items-center gap-2 w-full p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors group"
+          className="mt-3 flex items-center gap-2 w-full p-2 h-auto rounded-lg bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 group"
         >
           <span className="text-[10px] text-amber-400/70 uppercase tracking-wider font-medium shrink-0">
             Vault ID
@@ -154,7 +158,7 @@ export function VaultSyncToggle({ vaultPath, vaultName, status }: VaultSyncToggl
               copied ? 'text-green-400' : 'text-amber-400/50 group-hover:text-amber-400'
             }`}
           />
-        </button>
+        </Button>
       )}
 
       {syncStatus === 'error' && (

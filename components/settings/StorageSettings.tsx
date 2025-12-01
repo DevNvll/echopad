@@ -317,9 +317,10 @@ function VaultItem({
         </div>
         <div className="text-xs text-textMuted truncate">{vault.path}</div>
         {isDevMode && syncStatus?.vault_id && (
-          <button
+          <Button
+            variant="link"
             onClick={copyVaultId}
-            className="flex items-center gap-1.5 mt-1 text-[10px] text-amber-400/70 hover:text-amber-400 font-mono transition-colors"
+            className="flex items-center gap-1.5 h-auto p-0 mt-1 text-[10px] text-amber-400/70 hover:text-amber-400 font-mono"
             title="Click to copy vault ID"
           >
             <span>ID: {syncStatus.vault_id}</span>
@@ -327,7 +328,7 @@ function VaultItem({
               size={10}
               className={`shrink-0 ${copied ? 'text-green-400' : ''}`}
             />
-          </button>
+          </Button>
         )}
       </div>
       {!isActive && (

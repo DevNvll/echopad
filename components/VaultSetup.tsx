@@ -166,41 +166,43 @@ export function VaultSetup({
                   </div>
 
                   <div className="w-full space-y-3">
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={handleSelectLocalVault}
-                      className="w-full p-4 rounded-xl border border-border hover:border-brand/50 hover:bg-brand/5 transition-colors text-left group"
+                      className="w-full p-4 h-auto rounded-xl border-border hover:border-brand/50 hover:bg-brand/5 text-left group"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 w-full">
                         <div className="p-3 rounded-lg bg-surfaceHighlight group-hover:bg-brand/10 transition-colors">
                           <HardDrive className="w-5 h-5 text-textMuted group-hover:text-brand transition-colors" />
                         </div>
-                        <div>
+                        <div className="text-left">
                           <p className="font-medium text-textMain">Create Local Vault</p>
-                          <p className="text-xs text-textMuted">Store notes on this device only</p>
+                          <p className="text-xs text-textMuted font-normal">Store notes on this device only</p>
                         </div>
                       </div>
-                    </button>
+                    </Button>
 
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={handleSyncOption}
-                      className="w-full p-4 rounded-xl border border-border hover:border-brand/50 hover:bg-brand/5 transition-colors text-left group"
+                      className="w-full p-4 h-auto rounded-xl border-border hover:border-brand/50 hover:bg-brand/5 text-left group"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 w-full">
                         <div className="p-3 rounded-lg bg-surfaceHighlight group-hover:bg-brand/10 transition-colors">
                           <Cloud className="w-5 h-5 text-textMuted group-hover:text-brand transition-colors" />
                         </div>
-                        <div>
+                        <div className="text-left">
                           <p className="font-medium text-textMain">
                             {isLoggedIn ? 'Connect Synced Vault' : 'Sign in to Sync'}
                           </p>
-                          <p className="text-xs text-textMuted">
+                          <p className="text-xs text-textMuted font-normal">
                             {isLoggedIn 
                               ? `Signed in as ${user?.email}` 
                               : 'Sync notes across devices'}
                           </p>
                         </div>
                       </div>
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -219,12 +221,14 @@ export function VaultSetup({
               <div className="max-w-lg w-full bg-surface border border-border rounded-2xl p-8 shadow-2xl">
                 <div className="flex flex-col gap-6">
                   <div className="flex items-center gap-3">
-                    <button 
+                    <Button 
+                      variant="ghost"
+                      size="icon"
                       onClick={() => setStep('choose')}
-                      className="p-2 rounded-lg hover:bg-surfaceHighlight transition-colors"
+                      className="h-9 w-9 text-textMuted"
                     >
-                      <ChevronLeft className="w-5 h-5 text-textMuted" />
-                    </button>
+                      <ChevronLeft className="w-5 h-5" />
+                    </Button>
                     <div>
                       <h2 className="text-lg font-bold">Your Vaults</h2>
                       <p className="text-xs text-textMuted">
@@ -240,19 +244,20 @@ export function VaultSetup({
                   ) : (
                     <div className="space-y-3">
                       {remoteVaults.map((vault) => (
-                        <button
+                        <Button
                           key={vault.id}
+                          variant="outline"
                           onClick={() => handleConnectRemoteVault(vault)}
                           disabled={isConnecting}
-                          className="w-full p-4 rounded-xl border border-border hover:border-brand/50 hover:bg-brand/5 transition-colors text-left group disabled:opacity-50"
+                          className="w-full p-4 h-auto rounded-xl border-border hover:border-brand/50 hover:bg-brand/5 text-left group"
                         >
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-4 w-full">
                             <div className="p-3 rounded-lg bg-surfaceHighlight group-hover:bg-brand/10 transition-colors">
                               <Download className="w-5 h-5 text-textMuted group-hover:text-brand transition-colors" />
                             </div>
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 text-left">
                               <p className="font-medium text-textMain truncate">{vault.name}</p>
-                              <p className="text-xs text-textMuted">
+                              <p className="text-xs text-textMuted font-normal">
                                 {vault.file_count} files • {formatBytes(vault.total_size_bytes)}
                               </p>
                             </div>
@@ -260,7 +265,7 @@ export function VaultSetup({
                               <Loader2 className="w-5 h-5 animate-spin text-brand" />
                             )}
                           </div>
-                        </button>
+                        </Button>
                       ))}
 
                       {remoteVaults.length === 0 && (
@@ -270,20 +275,21 @@ export function VaultSetup({
                       )}
 
                       <div className="pt-2 border-t border-border">
-                        <button
+                        <Button
+                          variant="outline"
                           onClick={handleCreateNewSyncedVault}
-                          className="w-full p-4 rounded-xl border border-dashed border-border hover:border-brand/50 hover:bg-brand/5 transition-colors text-left group"
+                          className="w-full p-4 h-auto rounded-xl border-dashed border-border hover:border-brand/50 hover:bg-brand/5 text-left group"
                         >
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-4 w-full">
                             <div className="p-3 rounded-lg bg-surfaceHighlight group-hover:bg-brand/10 transition-colors">
                               <Plus className="w-5 h-5 text-textMuted group-hover:text-brand transition-colors" />
                             </div>
-                            <div>
+                            <div className="text-left">
                               <p className="font-medium text-textMain">Create New Vault</p>
-                              <p className="text-xs text-textMuted">Start fresh with a new synced vault</p>
+                              <p className="text-xs text-textMuted font-normal">Start fresh with a new synced vault</p>
                             </div>
                           </div>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}

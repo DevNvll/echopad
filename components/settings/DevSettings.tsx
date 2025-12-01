@@ -133,13 +133,15 @@ function InfoRow({ label, value, onCopy, copied, truncate }: InfoRowProps) {
           {value}
         </span>
       </div>
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={onCopy}
-        className="p-1 rounded text-textMuted hover:text-textMain hover:bg-surfaceHighlight opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        className="h-6 w-6 p-1 text-textMuted hover:text-textMain opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
         title="Copy"
       >
         {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-      </button>
+      </Button>
     </div>
   )
 }

@@ -9,6 +9,7 @@ import {
   useTagsStore
 } from '../stores'
 import { useMarkdownComponents } from './message-list/useMarkdownComponents'
+import { Button } from '@/components/ui/button'
 
 export const InputArea: React.FC = () => {
   const { vaultPath } = useVaultStore()
@@ -210,17 +211,21 @@ export const InputArea: React.FC = () => {
               onChange={handleFileSelect}
               className="hidden"
             />
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading || !vaultPath}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-textMuted hover:text-textMain hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+              className="w-8 h-8 text-textMuted hover:text-textMain hover:bg-white/5 active:scale-95"
               title="Add image"
             >
               <ImagePlus size={18} strokeWidth={2} />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-textMuted hover:text-textMain hover:bg-white/5 transition-all active:scale-95"
+              className="w-8 h-8 text-textMuted hover:text-textMain hover:bg-white/5 active:scale-95"
               title={isExpanded ? 'Collapse input' : 'Expand input'}
             >
               {isExpanded ? (
@@ -228,13 +233,15 @@ export const InputArea: React.FC = () => {
               ) : (
                 <Maximize2 size={16} strokeWidth={2} />
               )}
-            </button>
+            </Button>
           </div>
 
           <div className="flex items-center gap-1">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setIsPreviewMode(!isPreviewMode)}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95 ${isPreviewMode ? 'text-brand bg-brand/10' : 'text-textMuted hover:text-textMain hover:bg-white/5'}`}
+              className={`w-8 h-8 active:scale-95 ${isPreviewMode ? 'text-brand bg-brand/10' : 'text-textMuted hover:text-textMain hover:bg-white/5'}`}
               title={isPreviewMode ? 'Edit mode' : 'Preview markdown'}
             >
               {isPreviewMode ? (
@@ -242,14 +249,15 @@ export const InputArea: React.FC = () => {
               ) : (
                 <Eye size={16} strokeWidth={2} />
               )}
-            </button>
-            <button
+            </Button>
+            <Button
+              size="icon"
               onClick={handleSendMessage}
               disabled={!content.trim() || isUploading}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-brand text-background disabled:opacity-20 disabled:bg-white/10 disabled:text-textMuted transition-all hover:opacity-90 active:scale-95"
+              className="w-8 h-8 bg-brand text-background disabled:opacity-20 disabled:bg-white/10 disabled:text-textMuted hover:opacity-90 active:scale-95"
             >
               <ArrowUp size={18} strokeWidth={2.5} />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
