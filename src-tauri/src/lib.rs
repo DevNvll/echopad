@@ -420,11 +420,19 @@ fn hide_quick_capture(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(debug_assertions)]
 #[tauri::command]
 fn open_devtools(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.open_devtools();
     }
+    Ok(())
+}
+
+#[cfg(not(debug_assertions))]
+#[tauri::command]
+fn open_devtools(_app: AppHandle) -> Result<(), String> {
+    // Devtools not available in release builds
     Ok(())
 }
 
