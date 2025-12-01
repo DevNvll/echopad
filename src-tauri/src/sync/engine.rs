@@ -652,6 +652,9 @@ impl SyncEngine {
             .await
             .map_err(|e| SyncError::InvalidData(e.to_string()))?;
 
+        // Build a set of deleted paths for quick lookup
+        let deleted_paths: std::collections::HashSet<&str> = change_set.deleted.iter().map(|s| s.as_str()).collect();
+        
         // Process results and upload files
         for result in push_response.results {
             if result.status == "accepted" {
@@ -690,12 +693,23 @@ impl SyncEngine {
                             }
                         }
                     }
-                } else {
-                    // This is a delete operation (no upload needed)
+                } else if deleted_paths.contains(path.as_str()) {
+                    // This is a delete operation that was accepted
                     deleted += 1;
                     // Remove from local state (use vault_id)
                     if let Some(ref state_manager) = self.state_manager {
                         state_manager.remove_file_state_by_id(&self.vault_id, &path);
+                    }
+                } else {
+                    // This is a create/update where server already has matching content
+                    // (hash matches, no upload needed) - mark as synced
+                    if let Some(ref state_manager) = self.state_manager {
+                        let version = result.new_version.unwrap_or(1) as u32;
+                        // Get the content hash from the scan result for this file
+                        if let Some(info) = change_set.changed.iter().find(|f| f.relative_path == path) {
+                            state_manager.mark_synced_by_id(&self.vault_id, &path, &info.content_hash, version);
+                            println!("[Sync] File already up-to-date on server: {}", path);
+                        }
                     }
                 }
             }
