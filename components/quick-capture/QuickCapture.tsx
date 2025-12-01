@@ -237,6 +237,7 @@ export const QuickCapture: React.FC = () => {
           onChange={(e) => setContent(e.target.value)}
           placeholder="Quick note... (Tab to change notebook)"
           disabled={isSaving}
+          autoComplete="off"
           className={clsx(
             'flex-1 bg-transparent text-textMain text-sm h-full',
             'placeholder-textMuted/40',

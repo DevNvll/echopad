@@ -14,6 +14,7 @@ export const CommandInput = ({ value, onValueChange }: CommandInputProps) => {
         value={value}
         onValueChange={onValueChange}
         placeholder="Type a command or search notes..."
+        autoComplete="off"
         className="flex-1 h-12 bg-transparent text-sm text-textMain placeholder:text-textMuted/50 outline-none font-medium font-sans"
       />
       <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-border bg-surfaceHighlight px-1.5 font-mono text-[10px] font-medium text-textMuted">

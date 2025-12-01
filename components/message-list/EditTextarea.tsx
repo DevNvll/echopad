@@ -47,6 +47,7 @@ export const EditTextarea: React.FC<EditTextareaProps> = React.memo(
             e.target.style.height = e.target.scrollHeight + 'px'
           }}
           onKeyDown={handleKeyDown}
+          autoComplete="off"
           className="w-full bg-black/30 border border-brand/20 rounded-lg p-3 text-[15px] text-textMain focus:outline-none focus:border-brand/40 resize-none overflow-hidden font-sans leading-relaxed transition-colors"
           rows={1}
         />

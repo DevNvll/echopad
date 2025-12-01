@@ -33,6 +33,11 @@ function Root() {
   return <App />;
 }
 
+// Disable native context menu
+document.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+});
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");

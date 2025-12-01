@@ -195,6 +195,7 @@ export const InputArea: React.FC = () => {
               onPaste={handlePaste}
               placeholder={`Type your message here...`}
               rows={1}
+              autoComplete="off"
               className={`w-full bg-transparent text-textMain placeholder-textMuted/40 resize-none outline-none text-[15px] leading-relaxed overflow-y-auto font-sans custom-scrollbar transition-all duration-300 ${isExpanded ? 'flex-1 min-h-0' : 'min-h-[40px] max-h-[300px]'}`}
             />
           )}
