@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, Square, X, Copy, Search, RefreshCw, Cloud, CloudOff, AlertCircle, CheckCircle, CloudDownload } from 'lucide-react'
+import { Minus, Square, X, Copy, Search, RefreshCw, Cloud, CloudOff, AlertCircle, CheckCircle, CloudDownload, Settings } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSyncStore } from '@/stores/syncStore'
 import { useVaultStore } from '@/stores/vaultStore'
+import { useUIStore } from '@/stores/uiStore'
 
 interface TitleBarProps {
   onOpenCommandPalette?: () => void
@@ -20,6 +21,7 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   
   const { isLoggedIn, vaultStatuses, syncNow, refreshStatus, remotePendingChanges } = useSyncStore()
   const { vaultPath } = useVaultStore()
+  const { openSettings } = useUIStore()
 
   // Sync status for current vault
   const currentVaultStatus = vaultStatuses.find((v) => v.vault_path === vaultPath)
@@ -130,6 +132,15 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
       </div>
 
       <div className="flex items-center h-full shrink-0">
+        {/* Settings Button */}
+        <button
+          onClick={() => openSettings()}
+          title="Settings"
+          className="h-full w-10 flex items-center justify-center text-textMuted hover:bg-white/5 transition-colors"
+        >
+          <Settings size={14} />
+        </button>
+
         {/* Sync Now Button */}
         <button
           onClick={handleSyncNow}

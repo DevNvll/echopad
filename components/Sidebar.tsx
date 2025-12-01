@@ -795,19 +795,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
           </DndContext>
         </div>
       </div>
-
-      <div className="px-3 py-3 border-t border-border/30">
-        <button
-          onClick={() => openSettings()}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-textMuted hover:text-textMain hover:bg-surfaceHighlight/50 transition-colors group"
-        >
-          <Settings
-            size={16}
-            className="text-textMuted/60 group-hover:text-textMuted"
-          />
-          <span className="text-[13px] font-medium">Settings</span>
-        </button>
-      </div>
     </div>
   )
 }
