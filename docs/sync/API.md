@@ -600,3 +600,4 @@ All error responses follow this format:
 | `*/sync/push` | 30 per minute per vault |
 | `*/files/*/upload` | 100 per minute per vault |
 
+

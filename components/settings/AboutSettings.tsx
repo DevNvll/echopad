@@ -112,11 +112,11 @@ export function AboutSettings({ appName }: AboutSettingsProps) {
       <Separator className="bg-border/50" />
       <div className="space-y-4">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand/30 to-brand/10 border border-brand/20 flex items-center justify-center">
-            <span className="text-2xl font-bold text-brand">
-              {appName.charAt(0).toUpperCase()}
-            </span>
-          </div>
+          <img
+            src="/app-icon.png"
+            alt={`${appName} icon`}
+            className="w-16 h-16 rounded-2xl"
+          />
           <div>
             <h4 className="font-semibold text-textMain">{appName}</h4>
             <p className="text-xs text-textMuted">Version {currentVersion}</p>
