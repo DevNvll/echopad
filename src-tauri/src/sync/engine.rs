@@ -142,21 +142,42 @@ impl SyncEngine {
         let initial_scan = scan_vault(vault_path)?;
         println!("[Sync] Found {} local files before pull", initial_scan.file_count);
         
-        // 2. Detect locally deleted files BEFORE pulling
-        // These are files that we previously synced but are no longer on disk
+        // 2. Detect ALL local changes BEFORE pulling
+        // This includes: new files, modified files, and deleted files
+        // We need to protect these from being overwritten by pull
+        let local_changes = self.get_local_changes(&initial_scan);
         let locally_deleted = self.detect_local_deletes(&initial_scan);
-        if !locally_deleted.is_empty() {
-            println!("[Sync] Detected {} locally deleted files", locally_deleted.len());
-            for path in locally_deleted.iter().take(5) {
-                println!("[Sync]   Deleted: {}", path);
+        
+        // Build set of paths that have local changes (should not be overwritten by pull)
+        let mut protected_paths: Vec<String> = local_changes.changed
+            .iter()
+            .map(|f| f.relative_path.clone())
+            .collect();
+        protected_paths.extend(locally_deleted.clone());
+        
+        if !local_changes.changed.is_empty() {
+            println!("[Sync] Detected {} locally modified/new files (protected from pull)", local_changes.changed.len());
+            for info in local_changes.changed.iter().take(3) {
+                println!("[Sync]   Modified: {}", info.relative_path);
             }
-            if locally_deleted.len() > 5 {
-                println!("[Sync]   ... and {} more deleted files", locally_deleted.len() - 5);
+            if local_changes.changed.len() > 3 {
+                println!("[Sync]   ... and {} more modified files", local_changes.changed.len() - 3);
             }
         }
         
-        // 3. Pull remote changes, but skip files that were locally deleted
-        match self.pull_changes_excluding(vault_path, &locally_deleted).await {
+        if !locally_deleted.is_empty() {
+            println!("[Sync] Detected {} locally deleted files", locally_deleted.len());
+            for path in locally_deleted.iter().take(3) {
+                println!("[Sync]   Deleted: {}", path);
+            }
+            if locally_deleted.len() > 3 {
+                println!("[Sync]   ... and {} more deleted files", locally_deleted.len() - 3);
+            }
+        }
+        
+        // 3. Pull remote changes, but skip files that have local changes
+        // This prevents overwriting local modifications with older server versions
+        match self.pull_changes_excluding(vault_path, &protected_paths).await {
             Ok(downloaded) => {
                 files_downloaded = downloaded;
                 println!("[Sync] Downloaded {} files", downloaded);
@@ -168,28 +189,34 @@ impl SyncEngine {
         }
 
         // 4. Re-scan AFTER pulling to include downloaded files
-        let scan_result = scan_vault(vault_path)?;
-        println!("[Sync] Found {} local files after pull", scan_result.file_count);
+        let final_scan = scan_vault(vault_path)?;
+        println!("[Sync] Found {} local files after pull", final_scan.file_count);
 
-        // 5. Detect local changes for push (new/modified files)
-        let mut change_set = self.get_local_changes(&scan_result);
+        // 5. Build final change set for push
+        // Use the changes detected BEFORE pull (not affected by downloaded files)
+        // Plus add any new files that appeared (unlikely but handle it)
+        let mut final_changes = self.get_local_changes(&final_scan);
         
-        // 6. Add locally deleted files to the change set for pushing deletes
-        change_set.deleted.extend(locally_deleted);
+        // Make sure locally deleted files are included in deletes
+        for deleted_path in &locally_deleted {
+            if !final_changes.deleted.contains(deleted_path) {
+                final_changes.deleted.push(deleted_path.clone());
+            }
+        }
         
-        println!("[Sync] Detected {} changed files, {} deleted files", 
-            change_set.changed.len(), change_set.deleted.len());
+        println!("[Sync] Final: {} changed files, {} deleted files to push", 
+            final_changes.changed.len(), final_changes.deleted.len());
         
         // Log the first few changed files for debugging
-        for (i, info) in change_set.changed.iter().take(5).enumerate() {
-            println!("[Sync]   Changed file {}: {}", i + 1, info.relative_path);
+        for (i, info) in final_changes.changed.iter().take(5).enumerate() {
+            println!("[Sync]   Will upload {}: {}", i + 1, info.relative_path);
         }
-        if change_set.changed.len() > 5 {
-            println!("[Sync]   ... and {} more changed files", change_set.changed.len() - 5);
+        if final_changes.changed.len() > 5 {
+            println!("[Sync]   ... and {} more files to upload", final_changes.changed.len() - 5);
         }
 
-        // 7. Push changes (including deletes)
-        match self.push_changes_incremental(&change_set, &scan_result).await {
+        // 6. Push changes (including deletes)
+        match self.push_changes_incremental(&final_changes, &final_scan).await {
             Ok((uploaded, deleted)) => {
                 files_uploaded = uploaded;
                 files_deleted = deleted;
@@ -303,10 +330,10 @@ impl SyncEngine {
             // Process each change
             println!("[Sync] Processing {} remote changes", pull_response.changes.len());
             for change in &pull_response.changes {
-                // Decode path to check if it should be excluded
+                // Decode path to check if it should be excluded (has local changes)
                 if let Ok(path) = decode_path(&change.encrypted_path) {
                     if exclude_set.contains(path.as_str()) {
-                        println!("[Sync]   Skipping locally deleted file: {}", path);
+                        println!("[Sync]   Skipping (has local changes): {}", path);
                         continue;
                     }
                 }
