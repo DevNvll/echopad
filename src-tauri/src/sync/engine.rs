@@ -293,7 +293,19 @@ impl SyncEngine {
     async fn pull_changes_excluding(&self, vault_path: &Path, exclude_paths: &[String]) -> SyncResult<u32> {
         let exclude_set: std::collections::HashSet<&str> = exclude_paths.iter().map(|s| s.as_str()).collect();
         let mut downloaded = 0u32;
-        let mut cursor: Option<String> = None;
+        
+        // Load stored cursor from state manager to continue from where we left off
+        let mut cursor: Option<String> = self.state_manager
+            .as_ref()
+            .and_then(|sm| sm.get_cursor_by_id(&self.vault_id));
+        
+        if cursor.is_some() {
+            println!("[Sync] Resuming from cursor: {}", cursor.as_ref().unwrap());
+        } else {
+            println!("[Sync] Starting fresh pull (no cursor)");
+        }
+        
+        let mut final_cursor: Option<String> = cursor.clone();
 
         loop {
             let url = format!(
@@ -328,7 +340,9 @@ impl SyncEngine {
                 .map_err(|e| SyncError::InvalidData(e.to_string()))?;
 
             // Process each change
-            println!("[Sync] Processing {} remote changes", pull_response.changes.len());
+            if !pull_response.changes.is_empty() {
+                println!("[Sync] Processing {} remote changes", pull_response.changes.len());
+            }
             for change in &pull_response.changes {
                 // Decode path to check if it should be excluded (has local changes)
                 if let Ok(path) = decode_path(&change.encrypted_path) {
@@ -355,11 +369,20 @@ impl SyncEngine {
                     }
                 }
             }
+            
+            // Track the cursor for saving later
+            final_cursor = Some(pull_response.next_cursor.clone());
 
             if !pull_response.has_more {
                 break;
             }
             cursor = Some(pull_response.next_cursor);
+        }
+        
+        // Save the final cursor to state manager so next sync continues from here
+        if let (Some(ref state_manager), Some(cursor_value)) = (&self.state_manager, final_cursor) {
+            state_manager.update_sync_cursor_by_id(&self.vault_id, cursor_value);
+            println!("[Sync] Cursor saved for next sync");
         }
 
         Ok(downloaded)
