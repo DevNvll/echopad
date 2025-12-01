@@ -9,10 +9,11 @@ import {
   ChevronRight,
   Check,
   Settings,
-  LayoutDashboard
+  LayoutDashboard,
+  Cloud
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { useVaultStore, useNotebookStore, useUIStore } from '../stores'
+import { useVaultStore, useNotebookStore, useUIStore, useSyncStore } from '../stores'
 import { getIconByName } from './IconPicker'
 import { useKnownVaults, useVaultIcons } from '../hooks'
 
@@ -180,6 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
     setActiveNotebook
   } = useNotebookStore()
   const { openCreateModal, openContextMenu, openSettings } = useUIStore()
+  const { vaultStatuses } = useSyncStore()
 
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
@@ -187,6 +189,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
 
   const { data: knownVaults = [] } = useKnownVaults()
   const { data: vaultIcons = {} } = useVaultIcons(knownVaults)
+
+  // Helper to check if a vault is synced
+  const isVaultSynced = useCallback((path: string) => {
+    return vaultStatuses.some(v => v.vault_path === path && v.enabled)
+  }, [vaultStatuses])
 
   const pinnedNotebooks = collectPinnedNotebooks(notebooks)
   const vaultName = vaultPath?.split(/[/\\]/).pop() || 'Unknown Vault'
@@ -307,8 +314,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
             <CurrentVaultIconComponent size={16} className="text-brand" />
           </div>
           <div className="flex-1 min-w-0 text-left">
-            <div className="text-[13px] font-semibold text-textMain truncate leading-tight">
+            <div className="text-[13px] font-semibold text-textMain truncate leading-tight flex items-center gap-1.5">
               {vaultName}
+              {vaultPath && isVaultSynced(vaultPath) && (
+                <Cloud size={12} className="text-brand shrink-0" />
+              )}
             </div>
             <div className="text-[11px] text-textMuted truncate">
               Current vault
@@ -328,6 +338,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
             <div className="p-1.5 max-h-[200px] overflow-y-auto">
               {knownVaults.map((vault) => {
                 const isActive = vault.path === vaultPath
+                const isSynced = isVaultSynced(vault.path)
                 const VaultIcon = getIconByName(
                   vaultIcons[vault.path] || 'FolderOpen'
                 )
@@ -353,8 +364,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                           : 'text-textMuted shrink-0'
                       }
                     />
-                    <span className="text-[13px] text-textMain truncate flex-1">
+                    <span className="text-[13px] text-textMain truncate flex-1 flex items-center gap-1.5">
                       {vault.name}
+                      {isSynced && (
+                        <Cloud size={12} className="text-brand shrink-0" />
+                      )}
                     </span>
                     {isActive && (
                       <Check size={14} className="text-brand shrink-0" />

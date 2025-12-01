@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Loader2, RefreshCw, AlertCircle, CheckCircle, CloudOff } from 'lucide-react'
+import { Loader2, RefreshCw, AlertCircle, CheckCircle, CloudOff, Copy } from 'lucide-react'
 import { useSyncStore } from '../../stores/syncStore'
+import { useDevMode } from '../../hooks'
 import type { VaultSyncStatus } from '../../types/sync'
 
 interface VaultSyncToggleProps {
@@ -11,12 +12,23 @@ interface VaultSyncToggleProps {
 
 export function VaultSyncToggle({ vaultPath, vaultName, status }: VaultSyncToggleProps) {
   const [isSyncing, setIsSyncing] = useState(false)
+  const [copied, setCopied] = useState(false)
   const { enableVaultSync, disableVaultSync, syncNow, isLoggedIn } = useSyncStore()
+  const { isDevMode } = useDevMode()
 
   const isEnabled = status?.enabled ?? false
   const syncStatus = status?.status ?? 'disabled'
   const lastSyncAt = status?.last_sync_at
   const pendingChanges = status?.pending_changes ?? 0
+  const vaultId = status?.vault_id
+
+  const copyVaultId = async () => {
+    if (vaultId) {
+      await navigator.clipboard.writeText(vaultId)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
 
   const handleToggle = async () => {
     if (!isLoggedIn) return
@@ -123,6 +135,27 @@ export function VaultSyncToggle({ vaultPath, vaultName, status }: VaultSyncToggl
           </button>
         </div>
       </div>
+
+      {/* Dev mode: Show vault ID */}
+      {isDevMode && vaultId && (
+        <button
+          onClick={copyVaultId}
+          className="mt-3 flex items-center gap-2 w-full p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors group"
+        >
+          <span className="text-[10px] text-amber-400/70 uppercase tracking-wider font-medium shrink-0">
+            Vault ID
+          </span>
+          <span className="flex-1 text-xs text-amber-400 font-mono text-left break-all">
+            {vaultId}
+          </span>
+          <Copy
+            size={12}
+            className={`shrink-0 transition-colors ${
+              copied ? 'text-green-400' : 'text-amber-400/50 group-hover:text-amber-400'
+            }`}
+          />
+        </button>
+      )}
 
       {syncStatus === 'error' && (
         <div className="mt-3 p-2 rounded-lg bg-red-500/10 border border-red-500/20">

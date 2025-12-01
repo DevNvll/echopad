@@ -7,3 +7,4 @@ export {
   useSaveVaultIcon,
   vaultKeys
 } from './useVaultQueries'
+export { useDevMode } from './useDevMode'

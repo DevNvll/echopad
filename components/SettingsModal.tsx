@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   Settings,
   Palette,
@@ -6,7 +6,8 @@ import {
   X,
   HardDrive,
   Wrench,
-  Cloud
+  Cloud,
+  Bug
 } from 'lucide-react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useQueryClient } from '@tanstack/react-query'
@@ -25,7 +26,8 @@ import {
   StorageSettings,
   AppearanceSettings,
   AboutSettings,
-  AdvancedSettings
+  AdvancedSettings,
+  DevSettings
 } from './settings'
 import { SyncSettings } from './sync/SyncSettings'
 import { useVaultStore, useUIStore } from '../stores'
@@ -34,7 +36,8 @@ import {
   useVaultIcons,
   useVaultIcon,
   useSaveVaultIcon,
-  vaultKeys
+  vaultKeys,
+  useDevMode
 } from '../hooks'
 
 export type SettingsSection =
@@ -44,24 +47,30 @@ export type SettingsSection =
   | 'sync'
   | 'advanced'
   | 'about'
+  | 'dev'
 
-const NAV_ITEMS: {
+interface NavItem {
   id: SettingsSection
   label: string
   icon: React.ReactNode
-}[] = [
+  devOnly?: boolean
+}
+
+const NAV_ITEMS: NavItem[] = [
   { id: 'general', label: 'General', icon: <Settings size={16} /> },
   { id: 'storage', label: 'Storage', icon: <HardDrive size={16} /> },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
   { id: 'sync', label: 'Sync', icon: <Cloud size={16} /> },
   { id: 'advanced', label: 'Advanced', icon: <Wrench size={16} /> },
-  { id: 'about', label: 'About', icon: <Info size={16} /> }
+  { id: 'about', label: 'About', icon: <Info size={16} /> },
+  { id: 'dev', label: 'Developer', icon: <Bug size={16} />, devOnly: true }
 ]
 
 export function SettingsModal() {
   const { vaultPath, selectVault, switchVault } = useVaultStore()
   const { isSettingsOpen, settingsSection, closeSettings } = useUIStore()
   const queryClient = useQueryClient()
+  const { isDevMode } = useDevMode()
 
   const {
     settings,
@@ -81,6 +90,11 @@ export function SettingsModal() {
   const saveIconMutation = useSaveVaultIcon()
 
   const vaultName = vaultPath?.split(/[/\\]/).pop() || null
+
+  // Filter nav items based on dev mode
+  const filteredNavItems = useMemo(() => {
+    return NAV_ITEMS.filter((item) => !item.devOnly || isDevMode)
+  }, [isDevMode])
 
   useEffect(() => {
     if (isSettingsOpen) {
@@ -175,13 +189,14 @@ export function SettingsModal() {
           </Button>
         </DialogHeader>
 
-        <div className="flex min-h-[400px] max-h-[70vh]">
+        <div className="flex min-h-[400px] max-h-[70vh] overflow-hidden">
           <SettingsNav
             activeSection={activeSection}
             onSectionChange={setActiveSection}
+            navItems={filteredNavItems}
           />
 
-          <div className="flex-1 p-6 overflow-y-auto">
+          <div className="flex-1 p-6 overflow-y-auto overflow-x-hidden min-w-0">
             {activeSection === 'general' && (
               <GeneralSettings
                 appName={localAppName}
@@ -216,6 +231,7 @@ export function SettingsModal() {
             {activeSection === 'about' && (
               <AboutSettings appName={settings.appName} />
             )}
+            {activeSection === 'dev' && isDevMode && <DevSettings />}
           </div>
         </div>
       </DialogContent>
@@ -226,12 +242,17 @@ export function SettingsModal() {
 interface SettingsNavProps {
   activeSection: SettingsSection
   onSectionChange: (section: SettingsSection) => void
+  navItems: NavItem[]
 }
 
-function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps) {
+function SettingsNav({
+  activeSection,
+  onSectionChange,
+  navItems
+}: SettingsNavProps) {
   return (
     <nav className="w-44 border-r border-border/50 p-2 flex flex-col gap-0.5 bg-[#050505] shrink-0">
-      {NAV_ITEMS.map((item) => (
+      {navItems.map((item) => (
         <button
           key={item.id}
           onClick={() => onSectionChange(item.id)}
@@ -239,7 +260,8 @@ function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps) {
             'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left',
             activeSection === item.id
               ? 'bg-brand/20 text-brand'
-              : 'text-textMuted hover:text-textMain hover:bg-surfaceHighlight/50'
+              : 'text-textMuted hover:text-textMain hover:bg-surfaceHighlight/50',
+            item.devOnly && 'text-amber-400/70 hover:text-amber-400'
           )}
         >
           {item.icon}

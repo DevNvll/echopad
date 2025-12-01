@@ -1,5 +1,13 @@
-import { useState } from 'react'
-import { Plus, Trash2, Check, Cloud, Download, Loader2 } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import {
+  Plus,
+  Trash2,
+  Check,
+  Cloud,
+  Download,
+  Loader2,
+  Copy
+} from 'lucide-react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -8,7 +16,8 @@ import { cn } from '@/lib/utils'
 import { KnownVault, addKnownVault } from '@/api'
 import { getIconByName } from '@/components/IconPicker'
 import { useSyncStore } from '@/stores/syncStore'
-import type { VaultInfo } from '@/types/sync'
+import { useDevMode } from '@/hooks'
+import type { VaultInfo, VaultSyncStatus } from '@/types/sync'
 
 interface StorageSettingsProps {
   vaultPath: string | null
@@ -34,8 +43,23 @@ export function StorageSettings({
     null
   )
 
-  const { isLoggedIn, listRemoteVaults, connectVault, refreshStatus } =
-    useSyncStore()
+  const {
+    isLoggedIn,
+    listRemoteVaults,
+    connectVault,
+    refreshStatus,
+    vaultStatuses
+  } = useSyncStore()
+
+  const { isDevMode } = useDevMode()
+
+  // Helper to get vault sync status
+  const getVaultSyncStatus = useCallback(
+    (path: string): VaultSyncStatus | undefined => {
+      return vaultStatuses.find((v) => v.vault_path === path && v.enabled)
+    },
+    [vaultStatuses]
+  )
 
   const loadRemoteVaults = async () => {
     setIsLoadingRemote(true)
@@ -193,16 +217,21 @@ export function StorageSettings({
               No vaults found. Add a vault to get started.
             </div>
           ) : (
-            knownVaults.map((vault) => (
-              <VaultItem
-                key={vault.path}
-                vault={vault}
-                icon={vaultIcons[vault.path] || 'FolderOpen'}
-                isActive={vault.path === vaultPath}
-                onSwitch={() => onSwitchVault(vault.path)}
-                onRemove={() => onRemoveVault(vault.path)}
-              />
-            ))
+            knownVaults.map((vault) => {
+              const syncStatus = getVaultSyncStatus(vault.path)
+              return (
+                <VaultItem
+                  key={vault.path}
+                  vault={vault}
+                  icon={vaultIcons[vault.path] || 'FolderOpen'}
+                  isActive={vault.path === vaultPath}
+                  syncStatus={syncStatus}
+                  isDevMode={isDevMode}
+                  onSwitch={() => onSwitchVault(vault.path)}
+                  onRemove={() => onRemoveVault(vault.path)}
+                />
+              )
+            })
           )}
         </div>
 
@@ -219,6 +248,8 @@ interface VaultItemProps {
   vault: KnownVault
   icon: string
   isActive: boolean
+  syncStatus?: VaultSyncStatus
+  isDevMode: boolean
   onSwitch: () => void
   onRemove: () => void
 }
@@ -227,10 +258,22 @@ function VaultItem({
   vault,
   icon,
   isActive,
+  syncStatus,
+  isDevMode,
   onSwitch,
   onRemove
 }: VaultItemProps) {
   const IconComponent = getIconByName(icon)
+  const [copied, setCopied] = useState(false)
+
+  const copyVaultId = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (syncStatus?.vault_id) {
+      await navigator.clipboard.writeText(syncStatus.vault_id)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
 
   return (
     <div
@@ -255,10 +298,16 @@ function VaultItem({
         />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-textMain truncate">
             {vault.name}
           </span>
+          {syncStatus && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-sky-400 bg-sky-400/15 px-1.5 py-0.5 rounded">
+              <Cloud size={10} />
+              Synced
+            </span>
+          )}
           {isActive && (
             <span className="flex items-center gap-1 text-[10px] font-medium text-brand bg-brand/20 px-1.5 py-0.5 rounded">
               <Check size={10} />
@@ -267,6 +316,19 @@ function VaultItem({
           )}
         </div>
         <div className="text-xs text-textMuted truncate">{vault.path}</div>
+        {isDevMode && syncStatus?.vault_id && (
+          <button
+            onClick={copyVaultId}
+            className="flex items-center gap-1.5 mt-1 text-[10px] text-amber-400/70 hover:text-amber-400 font-mono transition-colors"
+            title="Click to copy vault ID"
+          >
+            <span>ID: {syncStatus.vault_id}</span>
+            <Copy
+              size={10}
+              className={`shrink-0 ${copied ? 'text-green-400' : ''}`}
+            />
+          </button>
+        )}
       </div>
       {!isActive && (
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
