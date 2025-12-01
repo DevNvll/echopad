@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { ArrowUp, ImagePlus, Maximize2, Minimize2 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import { ArrowUp, ImagePlus, Maximize2, Minimize2, Eye, EyeOff } from 'lucide-react'
 import { saveImage } from '../api'
 import {
   useVaultStore,
@@ -7,6 +8,7 @@ import {
   useNotesStore,
   useTagsStore
 } from '../stores'
+import { useMarkdownComponents } from './message-list/useMarkdownComponents'
 
 export const InputArea: React.FC = () => {
   const { vaultPath } = useVaultStore()
@@ -20,8 +22,12 @@ export const InputArea: React.FC = () => {
   const [content, setContent] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isPreviewMode, setIsPreviewMode] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Reuse existing markdown rendering components
+  const markdownComponents = useMarkdownComponents(vaultPath)
 
   // Auto-resize textarea based on content (only when not expanded)
   useEffect(() => {
@@ -52,7 +58,8 @@ export const InputArea: React.FC = () => {
   // Listen for focus-input event from keyboard shortcuts
   useEffect(() => {
     const handleFocusInput = () => {
-      textareaRef.current?.focus()
+      setIsPreviewMode(false) // Exit preview mode when focusing input
+      setTimeout(() => textareaRef.current?.focus(), 0)
     }
     window.addEventListener('focus-input', handleFocusInput)
     return () => window.removeEventListener('focus-input', handleFocusInput)
@@ -63,6 +70,7 @@ export const InputArea: React.FC = () => {
     const newNote = await createNote(vaultPath, activeNotebook, content)
     await syncNoteTags(newNote)
     setContent('')
+    setIsPreviewMode(false) // Reset preview mode after sending
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -70,10 +78,19 @@ export const InputArea: React.FC = () => {
       e.preventDefault()
       handleSendMessage()
     }
-    // Escape to collapse expanded input
-    if (e.key === 'Escape' && isExpanded) {
+    // Escape to collapse expanded input or exit preview mode
+    if (e.key === 'Escape') {
       e.preventDefault()
-      setIsExpanded(false)
+      if (isPreviewMode) {
+        setIsPreviewMode(false)
+      } else if (isExpanded) {
+        setIsExpanded(false)
+      }
+    }
+    // Ctrl/Cmd+Shift+P to toggle preview
+    if (e.key === 'p' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault()
+      setIsPreviewMode(!isPreviewMode)
     }
   }
 
@@ -156,16 +173,31 @@ export const InputArea: React.FC = () => {
         className={`w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden pointer-events-auto focus-within:shadow-[0_0_15px_-5px_color-mix(in_srgb,var(--accent-color)_20%,transparent)] focus-within:border-brand/30 transition-all duration-300 ease-out ${isExpanded ? 'h-[60vh]' : ''}`}
       >
         <div className={`px-4 pt-4 pb-2 ${isExpanded ? 'flex-1 flex flex-col min-h-0' : ''}`}>
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={`Type your message here...`}
-            rows={1}
-            className={`w-full bg-transparent text-textMain placeholder-textMuted/40 resize-none outline-none text-[15px] leading-relaxed overflow-y-auto font-sans custom-scrollbar transition-all duration-300 ${isExpanded ? 'flex-1 min-h-0' : 'min-h-[40px] max-h-[300px]'}`}
-          />
+          {isPreviewMode ? (
+            <div
+              className={`w-full text-textMain/90 text-[14px] leading-relaxed overflow-y-auto custom-scrollbar markdown-content ${isExpanded ? 'flex-1 min-h-0' : 'min-h-[40px] max-h-[300px]'}`}
+              onClick={() => setIsPreviewMode(false)}
+            >
+              {content.trim() ? (
+                <ReactMarkdown components={markdownComponents}>
+                  {content}
+                </ReactMarkdown>
+              ) : (
+                <span className="text-textMuted/40 italic">Nothing to preview...</span>
+              )}
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={`Type your message here...`}
+              rows={1}
+              className={`w-full bg-transparent text-textMain placeholder-textMuted/40 resize-none outline-none text-[15px] leading-relaxed overflow-y-auto font-sans custom-scrollbar transition-all duration-300 ${isExpanded ? 'flex-1 min-h-0' : 'min-h-[40px] max-h-[300px]'}`}
+            />
+          )}
         </div>
 
         <div className="flex items-center justify-between px-3 pb-3 mt-1">
@@ -198,7 +230,18 @@ export const InputArea: React.FC = () => {
             </button>
           </div>
 
-          <div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsPreviewMode(!isPreviewMode)}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95 ${isPreviewMode ? 'text-brand bg-brand/10' : 'text-textMuted hover:text-textMain hover:bg-white/5'}`}
+              title={isPreviewMode ? 'Edit mode' : 'Preview markdown'}
+            >
+              {isPreviewMode ? (
+                <EyeOff size={16} strokeWidth={2} />
+              ) : (
+                <Eye size={16} strokeWidth={2} />
+              )}
+            </button>
             <button
               onClick={handleSendMessage}
               disabled={!content.trim() || isUploading}
