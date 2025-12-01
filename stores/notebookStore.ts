@@ -7,13 +7,19 @@ import {
   deleteNotebook as apiDeleteNotebook,
   toggleNotebookPin,
   saveSetting,
-  getSetting
+  getSetting,
+  getPinnedOrder,
+  updatePinnedOrder,
+  getNotebookOrder,
+  updateNotebookOrder
 } from '../api'
 
 interface NotebookState {
   notebooks: Notebook[]
   activeNotebook: string | null
   isLoaded: boolean
+  pinnedOrder: string[]
+  notebookOrder: string[]
 
   loadNotebooks: (vaultPath: string) => Promise<void>
   selectNotebook: (relativePath: string) => void
@@ -31,10 +37,14 @@ interface NotebookState {
   togglePin: (notebook: Notebook) => Promise<void>
   restoreLastActiveNotebook: () => Promise<void>
   setActiveNotebook: (relativePath: string | null) => void
+  reorderPinnedNotebooks: (newOrder: string[]) => Promise<void>
+  reorderNotebooks: (newOrder: string[]) => Promise<void>
 
   allNotebooks: () => Notebook[]
   currentNotebook: () => Notebook | undefined
   notebookMap: () => Record<string, string>
+  sortedPinnedNotebooks: () => Notebook[]
+  sortedTopLevelNotebooks: () => Notebook[]
 }
 
 const flattenNotebooks = (nbs: Notebook[]): Notebook[] => {
@@ -71,10 +81,30 @@ export const useNotebookStore = create<NotebookState>((set, get) => ({
   notebooks: [],
   activeNotebook: null,
   isLoaded: false,
+  pinnedOrder: [],
+  notebookOrder: [],
 
   loadNotebooks: async (vaultPath: string) => {
     const nbs = await listNotebooks(vaultPath)
-    set({ notebooks: nbs, isLoaded: true })
+    const pinnedOrderMap = await getPinnedOrder()
+    const notebookOrderMap = await getNotebookOrder()
+
+    // Extract sorted pinned paths
+    const pinnedPaths = Object.entries(pinnedOrderMap)
+      .sort(([, a], [, b]) => a - b)
+      .map(([path]) => path)
+
+    // Extract sorted notebook paths (top-level only for now)
+    const notebookPaths = Object.entries(notebookOrderMap)
+      .sort(([, a], [, b]) => a - b)
+      .map(([path]) => path)
+
+    set({
+      notebooks: nbs,
+      isLoaded: true,
+      pinnedOrder: pinnedPaths,
+      notebookOrder: notebookPaths
+    })
   },
 
   selectNotebook: (relativePath: string) => {
@@ -129,7 +159,11 @@ export const useNotebookStore = create<NotebookState>((set, get) => ({
         state.notebooks,
         notebook.relativePath,
         (nb) => ({ ...nb, isPinned })
-      )
+      ),
+      // Update pinnedOrder: add to end if pinning, remove if unpinning
+      pinnedOrder: isPinned
+        ? [...state.pinnedOrder, notebook.relativePath]
+        : state.pinnedOrder.filter((p) => p !== notebook.relativePath)
     }))
   },
 
@@ -164,6 +198,46 @@ export const useNotebookStore = create<NotebookState>((set, get) => ({
       },
       {} as Record<string, string>
     )
+  },
+
+  reorderPinnedNotebooks: async (newOrder: string[]) => {
+    set({ pinnedOrder: newOrder })
+    await updatePinnedOrder(newOrder)
+  },
+
+  reorderNotebooks: async (newOrder: string[]) => {
+    set({ notebookOrder: newOrder })
+    await updateNotebookOrder(newOrder)
+  },
+
+  sortedPinnedNotebooks: () => {
+    const { notebooks, pinnedOrder } = get()
+    const allNbs = flattenNotebooks(notebooks)
+    const pinnedNbs = allNbs.filter((nb) => nb.isPinned)
+
+    // Sort by pinnedOrder, then alphabetically for any not in the order
+    return pinnedNbs.sort((a, b) => {
+      const aIdx = pinnedOrder.indexOf(a.relativePath)
+      const bIdx = pinnedOrder.indexOf(b.relativePath)
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+      if (aIdx !== -1) return -1
+      if (bIdx !== -1) return 1
+      return a.name.localeCompare(b.name)
+    })
+  },
+
+  sortedTopLevelNotebooks: () => {
+    const { notebooks, notebookOrder } = get()
+
+    // Sort top-level notebooks by notebookOrder, then alphabetically
+    return [...notebooks].sort((a, b) => {
+      const aIdx = notebookOrder.indexOf(a.relativePath)
+      const bIdx = notebookOrder.indexOf(b.relativePath)
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+      if (aIdx !== -1) return -1
+      if (bIdx !== -1) return 1
+      return a.name.localeCompare(b.name)
+    })
   }
 }))
 

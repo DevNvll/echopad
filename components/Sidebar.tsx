@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Notebook } from '../types'
 import {
   Hash,
@@ -13,27 +13,275 @@ import {
   Cloud
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { useVaultStore, useNotebookStore, useUIStore, useSyncStore } from '../stores'
+import {
+  useVaultStore,
+  useNotebookStore,
+  useUIStore,
+  useSyncStore
+} from '../stores'
 import { getIconByName } from './IconPicker'
 import { useKnownVaults, useVaultIcons } from '../hooks'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface SidebarProps {
   width: number
 }
 
-const flattenAllNotebooks = (notebooks: Notebook[]): Notebook[] => {
-  const result: Notebook[] = []
-  for (const nb of notebooks) {
-    result.push(nb)
-    if (nb.children) {
-      result.push(...flattenAllNotebooks(nb.children))
-    }
-  }
-  return result
+// Sortable pinned notebook item
+interface SortablePinnedItemProps {
+  notebook: Notebook
+  activeNotebook: string | null
+  onSelectNotebook: (relativePath: string) => void
+  onContextMenu: (e: React.MouseEvent, notebook: Notebook) => void
+  onTogglePin: (notebook: Notebook) => void
 }
 
-const collectPinnedNotebooks = (notebooks: Notebook[]): Notebook[] => {
-  return flattenAllNotebooks(notebooks).filter((n) => n.isPinned)
+const SortablePinnedItem: React.FC<SortablePinnedItemProps> = ({
+  notebook,
+  activeNotebook,
+  onSelectNotebook,
+  onContextMenu,
+  onTogglePin
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: notebook.relativePath })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="relative group/item cursor-grab active:cursor-grabbing"
+    >
+      <button
+        onClick={() => onSelectNotebook(notebook.relativePath)}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          onContextMenu(e, notebook)
+        }}
+        className={clsx(
+          'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mx-0 transition-all text-[14px] group relative font-medium',
+          activeNotebook === notebook.relativePath
+            ? 'bg-surfaceHighlight text-textMain shadow-sm'
+            : 'text-textMuted hover:bg-surfaceHighlight/40 hover:text-textMain/90'
+        )}
+      >
+        <Hash
+          size={16}
+          className={clsx(
+            'shrink-0',
+            activeNotebook === notebook.relativePath
+              ? 'text-brand'
+              : 'text-textMuted/60 group-hover:text-textMuted'
+          )}
+        />
+        <span className="truncate leading-none pb-px flex-1 text-left">
+          {notebook.name}
+        </span>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation()
+            onTogglePin(notebook)
+          }}
+          className="opacity-100 text-brand hover:text-brand transition-opacity p-1 hover:bg-surfaceHighlight rounded"
+          title="Unpin Notebook"
+        >
+          <PinOff size={12} />
+        </div>
+      </button>
+    </div>
+  )
+}
+
+// Sortable notebook tree item wrapper
+interface SortableNotebookItemProps {
+  notebook: Notebook
+  activeNotebook: string | null
+  onSelectNotebook: (relativePath: string) => void
+  onCreateSubnotebook: (parent: Notebook) => void
+  onContextMenu: (e: React.MouseEvent, notebook: Notebook) => void
+  onTogglePin: (notebook: Notebook) => void
+  expandedPaths: Set<string>
+  onToggleExpand: (path: string) => void
+  depth: number
+}
+
+const SortableNotebookItem: React.FC<SortableNotebookItemProps> = ({
+  notebook,
+  activeNotebook,
+  onSelectNotebook,
+  onCreateSubnotebook,
+  onContextMenu,
+  onTogglePin,
+  expandedPaths,
+  onToggleExpand,
+  depth
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: notebook.relativePath })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  }
+
+  const hasChildren = notebook.children && notebook.children.length > 0
+  const isExpanded = expandedPaths.has(notebook.relativePath)
+  const isActive = activeNotebook === notebook.relativePath
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="cursor-grab active:cursor-grabbing"
+    >
+      <div className="relative group/item">
+        <button
+          onClick={() => onSelectNotebook(notebook.relativePath)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            onContextMenu(e, notebook)
+          }}
+          className={clsx(
+            'w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-[14px] group relative font-medium',
+            isActive
+              ? 'bg-surfaceHighlight text-textMain shadow-sm'
+              : 'text-textMuted hover:bg-surfaceHighlight/40 hover:text-textMain/90'
+          )}
+          style={{ paddingLeft: `${12 + depth * 16}px` }}
+        >
+          <div
+            role={hasChildren ? 'button' : undefined}
+            tabIndex={hasChildren ? 0 : undefined}
+            onClick={
+              hasChildren
+                ? (e) => {
+                    e.stopPropagation()
+                    onToggleExpand(notebook.relativePath)
+                  }
+                : undefined
+            }
+            className={clsx(
+              'shrink-0 p-0.5 rounded w-[18px] h-[18px] flex items-center justify-center',
+              hasChildren &&
+                'hover:bg-surfaceHighlight text-textMuted/60 hover:text-textMuted cursor-pointer'
+            )}
+          >
+            {hasChildren &&
+              (isExpanded ? (
+                <ChevronDown size={14} />
+              ) : (
+                <ChevronRight size={14} />
+              ))}
+          </div>
+
+          <Hash
+            size={16}
+            className={clsx(
+              'shrink-0',
+              isActive
+                ? 'text-brand'
+                : 'text-textMuted/60 group-hover:text-textMuted'
+            )}
+          />
+
+          <span className="truncate leading-none flex-1 text-left">
+            {notebook.name}
+          </span>
+
+          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation()
+                onCreateSubnotebook(notebook)
+              }}
+              className="p-1 hover:bg-surfaceHighlight rounded text-textMuted hover:text-textMain"
+              title="Create Subnotebook"
+            >
+              <Plus size={12} />
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation()
+                onTogglePin(notebook)
+              }}
+              className={clsx(
+                'p-1 hover:bg-surfaceHighlight rounded text-textMuted hover:text-textMain',
+                notebook.isPinned && 'opacity-100! text-brand hover:text-brand'
+              )}
+              title={notebook.isPinned ? 'Unpin Notebook' : 'Pin Notebook'}
+            >
+              {notebook.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {hasChildren && isExpanded && (
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          {notebook.children!.map((child) => (
+            <NotebookTreeItem
+              key={child.relativePath}
+              notebook={child}
+              activeNotebook={activeNotebook}
+              onSelectNotebook={onSelectNotebook}
+              onCreateSubnotebook={onCreateSubnotebook}
+              onContextMenu={onContextMenu}
+              onTogglePin={onTogglePin}
+              expandedPaths={expandedPaths}
+              onToggleExpand={onToggleExpand}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface NotebookTreeItemProps {
@@ -171,6 +419,18 @@ const NotebookTreeItem: React.FC<NotebookTreeItemProps> = ({
   )
 }
 
+// Helper to flatten all notebooks
+const flattenAllNotebooks = (notebooks: Notebook[]): Notebook[] => {
+  const result: Notebook[] = []
+  for (const nb of notebooks) {
+    result.push(nb)
+    if (nb.children) {
+      result.push(...flattenAllNotebooks(nb.children))
+    }
+  }
+  return result
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
   const { vaultPath, switchVault } = useVaultStore()
   const {
@@ -178,7 +438,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
     activeNotebook,
     selectNotebook,
     togglePin,
-    setActiveNotebook
+    setActiveNotebook,
+    pinnedOrder,
+    notebookOrder,
+    reorderPinnedNotebooks,
+    reorderNotebooks
   } = useNotebookStore()
   const { openCreateModal, openContextMenu, openSettings } = useUIStore()
   const { vaultStatuses } = useSyncStore()
@@ -190,12 +454,52 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
   const { data: knownVaults = [] } = useKnownVaults()
   const { data: vaultIcons = {} } = useVaultIcons(knownVaults)
 
-  // Helper to check if a vault is synced
-  const isVaultSynced = useCallback((path: string) => {
-    return vaultStatuses.some(v => v.vault_path === path && v.enabled)
-  }, [vaultStatuses])
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8
+      }
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates
+    })
+  )
 
-  const pinnedNotebooks = collectPinnedNotebooks(notebooks)
+  // Helper to check if a vault is synced
+  const isVaultSynced = useCallback(
+    (path: string) => {
+      return vaultStatuses.some((v) => v.vault_path === path && v.enabled)
+    },
+    [vaultStatuses]
+  )
+
+  // Compute sorted pinned notebooks (subscribing to state changes)
+  const pinnedNotebooks = useMemo(() => {
+    const allNbs = flattenAllNotebooks(notebooks)
+    const pinnedNbs = allNbs.filter((nb) => nb.isPinned)
+    return pinnedNbs.sort((a, b) => {
+      const aIdx = pinnedOrder.indexOf(a.relativePath)
+      const bIdx = pinnedOrder.indexOf(b.relativePath)
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+      if (aIdx !== -1) return -1
+      if (bIdx !== -1) return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [notebooks, pinnedOrder])
+
+  // Compute sorted top-level notebooks (subscribing to state changes)
+  const topLevelNotebooks = useMemo(() => {
+    return [...notebooks].sort((a, b) => {
+      const aIdx = notebookOrder.indexOf(a.relativePath)
+      const bIdx = notebookOrder.indexOf(b.relativePath)
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+      if (aIdx !== -1) return -1
+      if (bIdx !== -1) return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [notebooks, notebookOrder])
+
   const vaultName = vaultPath?.split(/[/\\]/).pop() || 'Unknown Vault'
   const currentVaultIcon = vaultPath
     ? vaultIcons[vaultPath] || 'FolderOpen'
@@ -254,47 +558,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
     [openContextMenu]
   )
 
-  const renderPinnedNotebookItem = (notebook: Notebook) => (
-    <button
-      key={notebook.relativePath}
-      onClick={() => selectNotebook(notebook.relativePath)}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        handleContextMenu(e, notebook)
-      }}
-      className={clsx(
-        'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mx-0 transition-all text-[14px] group relative font-medium',
-        activeNotebook === notebook.relativePath
-          ? 'bg-surfaceHighlight text-textMain shadow-sm'
-          : 'text-textMuted hover:bg-surfaceHighlight/40 hover:text-textMain/90'
-      )}
-    >
-      <Hash
-        size={16}
-        className={clsx(
-          'shrink-0',
-          activeNotebook === notebook.relativePath
-            ? 'text-brand'
-            : 'text-textMuted/60 group-hover:text-textMuted'
-        )}
-      />
-      <span className="truncate leading-none pb-px flex-1 text-left">
-        {notebook.name}
-      </span>
+  // Handle pinned section drag end
+  const handlePinnedDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
 
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={(e) => {
-          e.stopPropagation()
-          togglePin(notebook)
-        }}
-        className="opacity-100 text-brand hover:text-brand transition-opacity p-1 hover:bg-surfaceHighlight rounded"
-        title="Unpin Notebook"
-      >
-        <PinOff size={12} />
-      </div>
-    </button>
+      if (over && active.id !== over.id) {
+        const paths = pinnedNotebooks.map((nb) => nb.relativePath)
+        const oldIndex = paths.indexOf(active.id as string)
+        const newIndex = paths.indexOf(over.id as string)
+
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newOrder = arrayMove(paths, oldIndex, newIndex) as string[]
+          reorderPinnedNotebooks(newOrder)
+        }
+      }
+    },
+    [pinnedNotebooks, reorderPinnedNotebooks]
+  )
+
+  // Handle notebooks section drag end
+  const handleNotebooksDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+
+      if (over && active.id !== over.id) {
+        const paths = topLevelNotebooks.map((nb) => nb.relativePath)
+        const oldIndex = paths.indexOf(active.id as string)
+        const newIndex = paths.indexOf(over.id as string)
+
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newOrder = arrayMove(paths, oldIndex, newIndex) as string[]
+          reorderNotebooks(newOrder)
+        }
+      }
+    },
+    [topLevelNotebooks, reorderNotebooks]
   )
 
   return (
@@ -426,9 +725,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                 Pinned
               </h3>
             </div>
-            <div className="flex flex-col gap-0.5">
-              {pinnedNotebooks.map(renderPinnedNotebookItem)}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handlePinnedDragEnd}
+            >
+              <SortableContext
+                items={pinnedNotebooks.map((nb) => nb.relativePath)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-col gap-0.5">
+                  {pinnedNotebooks.map((notebook) => (
+                    <SortablePinnedItem
+                      key={notebook.relativePath}
+                      notebook={notebook}
+                      activeNotebook={activeNotebook}
+                      onSelectNotebook={selectNotebook}
+                      onContextMenu={handleContextMenu}
+                      onTogglePin={togglePin}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
             <div className="my-3 border-b border-border/30 mx-2" />
           </div>
         )}
@@ -447,22 +766,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
             </button>
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            {notebooks.map((notebook) => (
-              <NotebookTreeItem
-                key={notebook.relativePath}
-                notebook={notebook}
-                activeNotebook={activeNotebook}
-                onSelectNotebook={selectNotebook}
-                onCreateSubnotebook={(parent) => openCreateModal(parent)}
-                onContextMenu={handleContextMenu}
-                onTogglePin={togglePin}
-                expandedPaths={expandedPaths}
-                onToggleExpand={handleToggleExpand}
-                depth={0}
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleNotebooksDragEnd}
+          >
+            <SortableContext
+              items={topLevelNotebooks.map((nb) => nb.relativePath)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="flex flex-col gap-0.5">
+                {topLevelNotebooks.map((notebook) => (
+                  <SortableNotebookItem
+                    key={notebook.relativePath}
+                    notebook={notebook}
+                    activeNotebook={activeNotebook}
+                    onSelectNotebook={selectNotebook}
+                    onCreateSubnotebook={(parent) => openCreateModal(parent)}
+                    onContextMenu={handleContextMenu}
+                    onTogglePin={togglePin}
+                    expandedPaths={expandedPaths}
+                    onToggleExpand={handleToggleExpand}
+                    depth={0}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
 

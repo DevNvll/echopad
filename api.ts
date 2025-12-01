@@ -28,7 +28,20 @@ async function getDb(): Promise<Database> {
     `)
     await db.execute(`
       CREATE TABLE IF NOT EXISTS pinned_notebooks (
-        name TEXT PRIMARY KEY
+        name TEXT PRIMARY KEY,
+        sort_order INTEGER DEFAULT 0
+      )
+    `)
+    // Add sort_order column if it doesn't exist (migration for existing databases)
+    await db
+      .execute(
+        `ALTER TABLE pinned_notebooks ADD COLUMN sort_order INTEGER DEFAULT 0`
+      )
+      .catch(() => {})
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS notebook_order (
+        relative_path TEXT PRIMARY KEY,
+        sort_order INTEGER DEFAULT 0
       )
     `)
     await db.execute(`
@@ -312,10 +325,56 @@ export async function toggleNotebookPin(
     ])
     return false
   } else {
-    await database.execute('INSERT INTO pinned_notebooks (name) VALUES (?)', [
-      relativePath
-    ])
+    // Get the max sort_order and add 1 for new pinned item
+    const maxResult = await database.select<{ max_order: number | null }[]>(
+      'SELECT MAX(sort_order) as max_order FROM pinned_notebooks'
+    )
+    const nextOrder = (maxResult[0]?.max_order ?? -1) + 1
+    await database.execute(
+      'INSERT INTO pinned_notebooks (name, sort_order) VALUES (?, ?)',
+      [relativePath, nextOrder]
+    )
     return true
+  }
+}
+
+// Pinned notebooks order functions
+export async function getPinnedOrder(): Promise<Record<string, number>> {
+  const database = await getDb()
+  const result = await database.select<{ name: string; sort_order: number }[]>(
+    'SELECT name, sort_order FROM pinned_notebooks ORDER BY sort_order ASC'
+  )
+  return Object.fromEntries(result.map((r) => [r.name, r.sort_order]))
+}
+
+export async function updatePinnedOrder(orderedPaths: string[]): Promise<void> {
+  const database = await getDb()
+  for (let i = 0; i < orderedPaths.length; i++) {
+    await database.execute(
+      'UPDATE pinned_notebooks SET sort_order = ? WHERE name = ?',
+      [i, orderedPaths[i]]
+    )
+  }
+}
+
+// Notebook order functions
+export async function getNotebookOrder(): Promise<Record<string, number>> {
+  const database = await getDb()
+  const result = await database.select<
+    { relative_path: string; sort_order: number }[]
+  >('SELECT relative_path, sort_order FROM notebook_order')
+  return Object.fromEntries(result.map((r) => [r.relative_path, r.sort_order]))
+}
+
+export async function updateNotebookOrder(
+  orderedPaths: string[]
+): Promise<void> {
+  const database = await getDb()
+  for (let i = 0; i < orderedPaths.length; i++) {
+    await database.execute(
+      'INSERT INTO notebook_order (relative_path, sort_order) VALUES (?, ?) ON CONFLICT(relative_path) DO UPDATE SET sort_order = ?',
+      [orderedPaths[i], i, i]
+    )
   }
 }
 
