@@ -9,14 +9,35 @@ interface TitleBarProps {
   onOpenCommandPalette?: () => void
 }
 
+// Refresh sync status every 10 seconds when sync is enabled
+const SYNC_STATUS_REFRESH_INTERVAL = 10000
+
 export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false)
   const [isSyncingManual, setIsSyncingManual] = useState(false)
   const { settings } = useTheme()
   const appWindow = getCurrentWindow()
   
-  const { isLoggedIn, vaultStatuses, syncNow } = useSyncStore()
+  const { isLoggedIn, vaultStatuses, syncNow, refreshStatus } = useSyncStore()
   const { vaultPath } = useVaultStore()
+
+  // Sync status for current vault
+  const currentVaultStatus = vaultStatuses.find((v) => v.vault_path === vaultPath)
+  const isSyncEnabled = isLoggedIn && currentVaultStatus?.enabled
+
+  // Periodic sync status refresh
+  useEffect(() => {
+    if (!isSyncEnabled) return
+    
+    // Set up interval for periodic refresh
+    const intervalId = window.setInterval(() => {
+      refreshStatus()
+    }, SYNC_STATUS_REFRESH_INTERVAL)
+    
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [isSyncEnabled, refreshStatus])
 
   useEffect(() => {
     const checkMaximized = async () => {
@@ -39,9 +60,6 @@ export function TitleBar({ onOpenCommandPalette }: TitleBarProps) {
   const handleMaximize = () => appWindow.toggleMaximize()
   const handleClose = () => appWindow.close()
 
-  // Sync status for current vault
-  const currentVaultStatus = vaultStatuses.find((v) => v.vault_path === vaultPath)
-  const isSyncEnabled = isLoggedIn && currentVaultStatus?.enabled
   const isSyncing = currentVaultStatus?.status === 'syncing' || isSyncingManual
   const hasError = currentVaultStatus?.status === 'error'
   const pendingChanges = currentVaultStatus?.pending_changes ?? 0

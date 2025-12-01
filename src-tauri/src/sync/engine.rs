@@ -142,8 +142,21 @@ impl SyncEngine {
         let initial_scan = scan_vault(vault_path)?;
         println!("[Sync] Found {} local files before pull", initial_scan.file_count);
         
-        // 2. Pull remote changes first
-        match self.pull_changes(vault_path).await {
+        // 2. Detect locally deleted files BEFORE pulling
+        // These are files that we previously synced but are no longer on disk
+        let locally_deleted = self.detect_local_deletes(&initial_scan);
+        if !locally_deleted.is_empty() {
+            println!("[Sync] Detected {} locally deleted files", locally_deleted.len());
+            for path in locally_deleted.iter().take(5) {
+                println!("[Sync]   Deleted: {}", path);
+            }
+            if locally_deleted.len() > 5 {
+                println!("[Sync]   ... and {} more deleted files", locally_deleted.len() - 5);
+            }
+        }
+        
+        // 3. Pull remote changes, but skip files that were locally deleted
+        match self.pull_changes_excluding(vault_path, &locally_deleted).await {
             Ok(downloaded) => {
                 files_downloaded = downloaded;
                 println!("[Sync] Downloaded {} files", downloaded);
@@ -154,14 +167,16 @@ impl SyncEngine {
             }
         }
 
-        // 3. Re-scan AFTER pulling to include downloaded files
-        // This is critical - we need to detect changes based on current state,
-        // not the state before pulling (which would cause downloaded files to be "deleted")
+        // 4. Re-scan AFTER pulling to include downloaded files
         let scan_result = scan_vault(vault_path)?;
         println!("[Sync] Found {} local files after pull", scan_result.file_count);
 
-        // 4. Detect local changes (incremental sync if state manager available)
-        let change_set = self.get_local_changes(&scan_result);
+        // 5. Detect local changes for push (new/modified files)
+        let mut change_set = self.get_local_changes(&scan_result);
+        
+        // 6. Add locally deleted files to the change set for pushing deletes
+        change_set.deleted.extend(locally_deleted);
+        
         println!("[Sync] Detected {} changed files, {} deleted files", 
             change_set.changed.len(), change_set.deleted.len());
         
@@ -173,7 +188,7 @@ impl SyncEngine {
             println!("[Sync]   ... and {} more changed files", change_set.changed.len() - 5);
         }
 
-        // 5. Push only changed files
+        // 7. Push changes (including deletes)
         match self.push_changes_incremental(&change_set, &scan_result).await {
             Ok((uploaded, deleted)) => {
                 files_uploaded = uploaded;
@@ -226,7 +241,105 @@ impl SyncEngine {
         }
     }
 
-    /// Pull remote changes and apply them locally
+    /// Detect files that were previously synced but are no longer on disk (local deletes)
+    fn detect_local_deletes(&self, scan_result: &ScanResult) -> Vec<String> {
+        if let Some(ref state_manager) = self.state_manager {
+            let file_states = state_manager.get_all_file_states_by_id(&self.vault_id);
+            
+            // Files that have a local_hash (were synced) but are no longer on disk
+            file_states
+                .iter()
+                .filter(|fs| {
+                    // Has been synced before (has local_hash)
+                    fs.local_hash.is_some() &&
+                    // But no longer exists on disk
+                    !scan_result.files.contains_key(&fs.relative_path)
+                })
+                .map(|fs| fs.relative_path.clone())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Pull remote changes, excluding files that were locally deleted
+    async fn pull_changes_excluding(&self, vault_path: &Path, exclude_paths: &[String]) -> SyncResult<u32> {
+        let exclude_set: std::collections::HashSet<&str> = exclude_paths.iter().map(|s| s.as_str()).collect();
+        let mut downloaded = 0u32;
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let url = format!(
+                "{}/api/v1/vaults/{}/sync/pull",
+                self.server_url, self.vault_id
+            );
+
+            let response = self
+                .client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.access_token))
+                .json(&serde_json::json!({
+                    "cursor": cursor,
+                    "limit": 100
+                }))
+                .send()
+                .await
+                .map_err(|e| SyncError::Network(e.to_string()))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let text = response.text().await.unwrap_or_default();
+                return Err(SyncError::Server(format!(
+                    "Pull failed: {} - {}",
+                    status, text
+                )));
+            }
+
+            let pull_response: PullResponse = response
+                .json()
+                .await
+                .map_err(|e| SyncError::InvalidData(e.to_string()))?;
+
+            // Process each change
+            println!("[Sync] Processing {} remote changes", pull_response.changes.len());
+            for change in &pull_response.changes {
+                // Decode path to check if it should be excluded
+                if let Ok(path) = decode_path(&change.encrypted_path) {
+                    if exclude_set.contains(path.as_str()) {
+                        println!("[Sync]   Skipping locally deleted file: {}", path);
+                        continue;
+                    }
+                }
+                
+                match self.apply_remote_change(vault_path, change).await {
+                    Ok(()) => {
+                        downloaded += 1;
+                        // Decode path for logging
+                        if let Ok(path) = decode_path(&change.encrypted_path) {
+                            println!("[Sync]   Downloaded: {} (op: {})", path, change.operation);
+                        }
+                    }
+                    Err(e) => {
+                        if let Ok(path) = decode_path(&change.encrypted_path) {
+                            eprintln!("[Sync]   Failed to apply change for {}: {}", path, e);
+                        } else {
+                            eprintln!("[Sync]   Failed to apply change for {}: {}", change.encrypted_path, e);
+                        }
+                    }
+                }
+            }
+
+            if !pull_response.has_more {
+                break;
+            }
+            cursor = Some(pull_response.next_cursor);
+        }
+
+        Ok(downloaded)
+    }
+
+    /// Pull remote changes and apply them locally (legacy method, kept for compatibility)
+    #[allow(dead_code)]
     async fn pull_changes(&self, vault_path: &Path) -> SyncResult<u32> {
         let mut downloaded = 0u32;
         let mut cursor: Option<String> = None;
