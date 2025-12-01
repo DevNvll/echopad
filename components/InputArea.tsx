@@ -66,6 +66,14 @@ export const InputArea: React.FC = () => {
     return () => window.removeEventListener('focus-input', handleFocusInput)
   }, [])
 
+  // Auto-focus input when selecting a notebook
+  useEffect(() => {
+    if (activeNotebook) {
+      setIsPreviewMode(false)
+      setTimeout(() => textareaRef.current?.focus(), 0)
+    }
+  }, [activeNotebook])
+
   const handleSendMessage = async () => {
     if (!vaultPath || !activeNotebook || !content.trim()) return
     const newNote = await createNote(vaultPath, activeNotebook, content)
