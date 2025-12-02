@@ -3,11 +3,14 @@ import { useEffect } from 'react'
 interface UseKeyboardShortcutsOptions {
   isCommandOpen: boolean
   isSettingsOpen: boolean
+  isSearchOpen: boolean
   isAnyModalOpen: boolean
   hasActiveNotebook: boolean
   onToggleCommand: () => void
   onToggleSettings: () => void
   onOpenSettings: () => void
+  onOpenSearch: () => void
+  onCloseSearch: () => void
   onToggleSidebar: () => void
   onFocusInput: () => void
   onRestoreAndFocusInput: () => void
@@ -18,11 +21,14 @@ interface UseKeyboardShortcutsOptions {
 export function useKeyboardShortcuts({
   isCommandOpen,
   isSettingsOpen,
+  isSearchOpen,
   isAnyModalOpen,
   hasActiveNotebook,
   onToggleCommand,
   onToggleSettings,
   onOpenSettings,
+  onOpenSearch,
+  onCloseSearch,
   onToggleSidebar,
   onFocusInput,
   onRestoreAndFocusInput,
@@ -33,11 +39,23 @@ export function useKeyboardShortcuts({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Escape => Close any open modal/dialog
       if (e.key === 'Escape') {
+        if (isSearchOpen) {
+          e.preventDefault()
+          onCloseSearch()
+          return
+        }
         if (isCommandOpen || isSettingsOpen || isAnyModalOpen) {
           e.preventDefault()
           onCloseModals()
           return
         }
+      }
+
+      // Ctrl/Cmd + Shift + F => Open Search
+      if (e.key === 'f' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault()
+        onOpenSearch()
+        return
       }
 
       // Ctrl/Cmd + , => Settings
@@ -93,11 +111,14 @@ export function useKeyboardShortcuts({
   }, [
     isCommandOpen,
     isSettingsOpen,
+    isSearchOpen,
     isAnyModalOpen,
     hasActiveNotebook,
     onToggleCommand,
     onToggleSettings,
     onOpenSettings,
+    onOpenSearch,
+    onCloseSearch,
     onToggleSidebar,
     onFocusInput,
     onRestoreAndFocusInput,

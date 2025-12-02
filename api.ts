@@ -522,6 +522,95 @@ export async function searchNotes(
   return allNotes.sort((a, b) => b.createdAt - a.createdAt)
 }
 
+export interface AdvancedSearchParams {
+  query: string
+  dateFrom: Date | null
+  dateTo: Date | null
+  tags: string[]
+  notebooks: string[]
+  hasLink: boolean | null
+  hasImage: boolean | null
+  limit?: number
+  offset?: number
+}
+
+export async function advancedSearchNotes(
+  vaultPath: string,
+  params: AdvancedSearchParams
+): Promise<Note[]> {
+  const allNotebooks = await listNotebooks(vaultPath)
+  const flatNotebooks = flattenNotebooks(allNotebooks)
+  const allNotes: Note[] = []
+
+  const targetNotebooks =
+    params.notebooks.length > 0
+      ? flatNotebooks.filter((nb) => params.notebooks.includes(nb.relativePath))
+      : flatNotebooks
+
+  const lowerQuery = params.query.toLowerCase().replace(/^#/, '')
+  const isTagSearch = params.query.startsWith('#')
+
+  for (const notebook of targetNotebooks) {
+    const noteMetadata = await listNotes(vaultPath, notebook.relativePath)
+    for (const meta of noteMetadata) {
+      const note = await readNote(
+        vaultPath,
+        notebook.relativePath,
+        meta.filename
+      )
+
+      if (params.dateFrom && note.createdAt < params.dateFrom.getTime()) {
+        continue
+      }
+      if (params.dateTo && note.createdAt > params.dateTo.getTime()) {
+        continue
+      }
+
+      if (params.hasLink === true && !note.hasLink) {
+        continue
+      }
+
+      if (params.hasImage === true) {
+        const hasImage = /!\[.*?\]\(.*?\)/.test(note.content)
+        if (!hasImage) continue
+      }
+
+      if (params.tags.length > 0) {
+        const noteTags = note.tags.map((t) => t.toLowerCase())
+        const hasAllTags = params.tags.every((t) =>
+          noteTags.includes(t.toLowerCase())
+        )
+        if (!hasAllTags) continue
+      }
+
+      if (lowerQuery) {
+        if (isTagSearch) {
+          const hasMatchingTag = note.tags.some((tag) =>
+            tag.toLowerCase().includes(lowerQuery)
+          )
+          if (!hasMatchingTag) continue
+        } else {
+          const contentMatch = note.content.toLowerCase().includes(lowerQuery)
+          const tagMatch = note.tags.some((tag) =>
+            tag.toLowerCase().includes(lowerQuery)
+          )
+          if (!contentMatch && !tagMatch) continue
+        }
+      }
+
+      allNotes.push(note)
+    }
+  }
+
+  const sorted = allNotes.sort((a, b) => b.createdAt - a.createdAt)
+
+  if (params.limit !== undefined && params.offset !== undefined) {
+    return sorted.slice(params.offset, params.offset + params.limit)
+  }
+
+  return sorted
+}
+
 export async function saveImage(
   vaultPath: string,
   imageData: string,

@@ -444,7 +444,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
     reorderPinnedNotebooks,
     reorderNotebooks
   } = useNotebookStore()
-  const { openCreateModal, openContextMenu, openSettings } = useUIStore()
+  const { openCreateModal, openContextMenu, openSettings, closeSearch } = useUIStore()
   const { vaultStatuses } = useSyncStore()
 
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false)
@@ -545,6 +545,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
       return newSet
     })
   }, [])
+
+  const handleSelectNotebook = useCallback(
+    (relativePath: string) => {
+      selectNotebook(relativePath)
+      closeSearch()
+    },
+    [selectNotebook, closeSearch]
+  )
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, notebook: Notebook) => {
@@ -696,7 +704,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
 
       <div className="flex-1 overflow-y-auto px-3 py-4 custom-scrollbar flex flex-col gap-1">
         <button
-          onClick={() => setActiveNotebook(null)}
+          onClick={() => {
+            setActiveNotebook(null)
+            closeSearch()
+          }}
           className={clsx(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-[14px] group relative font-medium mb-2',
             activeNotebook === null
@@ -740,7 +751,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                       key={notebook.relativePath}
                       notebook={notebook}
                       activeNotebook={activeNotebook}
-                      onSelectNotebook={selectNotebook}
+                      onSelectNotebook={handleSelectNotebook}
                       onContextMenu={handleContextMenu}
                       onTogglePin={togglePin}
                     />
@@ -781,7 +792,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                     key={notebook.relativePath}
                     notebook={notebook}
                     activeNotebook={activeNotebook}
-                    onSelectNotebook={selectNotebook}
+                    onSelectNotebook={handleSelectNotebook}
                     onCreateSubnotebook={(parent) => openCreateModal(parent)}
                     onContextMenu={handleContextMenu}
                     onTogglePin={togglePin}

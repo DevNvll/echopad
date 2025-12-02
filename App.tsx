@@ -22,6 +22,7 @@ import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
 import { SettingsModal } from './components/SettingsModal'
 import { MediaSidesheet } from './components/MediaSidesheet'
+import { SearchPage } from './components/search'
 import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
@@ -67,6 +68,7 @@ function App() {
 
   const {
     isCommandOpen,
+    isSearchOpen,
     isSettingsOpen,
     isCreateModalOpen,
     isEditModalOpen,
@@ -76,6 +78,8 @@ function App() {
     toggleCommand,
     toggleSettings,
     openSettings,
+    openSearch,
+    closeSearch,
     closeContextMenu,
     openCreateModal,
     openEditModal,
@@ -120,11 +124,14 @@ function App() {
   useKeyboardShortcuts({
     isCommandOpen,
     isSettingsOpen,
+    isSearchOpen,
     isAnyModalOpen,
     hasActiveNotebook: !!activeNotebook,
     onToggleCommand: toggleCommand,
     onToggleSettings: toggleSettings,
     onOpenSettings: useCallback(() => openSettings('general'), [openSettings]),
+    onOpenSearch: useCallback(() => openSearch(), [openSearch]),
+    onCloseSearch: closeSearch,
     onToggleSidebar: toggleSidebar,
     onFocusInput: focusInput,
     onRestoreAndFocusInput: restoreAndFocusInput,
@@ -356,7 +363,12 @@ function App() {
             )}
 
             <div className="flex-1 flex flex-col min-w-0 bg-background relative shadow-2xl">
-              {activeNotebook ? (
+              {isSearchOpen ? (
+                <SearchPage
+                  isSidebarCollapsed={isSidebarCollapsed}
+                  onToggleSidebar={toggleSidebar}
+                />
+              ) : activeNotebook ? (
                 <>
                   <NotebookHeader
                     notebookPath={activeNotebook || undefined}

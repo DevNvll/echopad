@@ -5,5 +5,6 @@ export { useTagsStore } from './tagsStore'
 export { useUIStore } from './uiStore'
 export { useUpdaterStore } from './updaterStore'
 export { useSyncStore } from './syncStore'
+export { useSearchStore } from './searchStore'
 export type { UpdateStatus } from './updaterStore'
 

@@ -1,5 +1,5 @@
 import { Command } from 'cmdk';
-import { Plus, Settings, HardDrive, Palette, Info } from 'lucide-react';
+import { Plus, Settings, HardDrive, Palette, Info, Search } from 'lucide-react';
 import { CommandItem, CommandShortcut } from '../CommandItem';
 
 type SettingsSection = 'general' | 'storage' | 'appearance' | 'about';
@@ -7,12 +7,13 @@ type SettingsSection = 'general' | 'storage' | 'appearance' | 'about';
 interface AppCommandsGroupProps {
   onCreateNotebook: () => void;
   onOpenSettings: (section?: SettingsSection) => void;
+  onOpenSearch: () => void;
   onClose: () => void;
 }
 
 const GROUP_HEADING_CLASS = "text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2 px-2";
 
-export const AppCommandsGroup = ({ onCreateNotebook, onOpenSettings, onClose }: AppCommandsGroupProps) => {
+export const AppCommandsGroup = ({ onCreateNotebook, onOpenSettings, onOpenSearch, onClose }: AppCommandsGroupProps) => {
   const handleSelect = (action: () => void) => {
     action();
     onClose();
@@ -20,8 +21,14 @@ export const AppCommandsGroup = ({ onCreateNotebook, onOpenSettings, onClose }: 
 
   return (
     <Command.Group heading="App Commands" className={GROUP_HEADING_CLASS}>
+      <CommandItem onSelect={() => handleSelect(onOpenSearch)}>
+        <Search className="mr-2 h-4 w-4 text-brand" />
+        <span>Advanced Search</span>
+        <CommandShortcut>⌘⇧F</CommandShortcut>
+      </CommandItem>
+
       <CommandItem onSelect={() => handleSelect(onCreateNotebook)}>
-        <Plus className="mr-2 h-4 w-4 text-brand" />
+        <Plus className="mr-2 h-4 w-4 text-textMuted" />
         <span>Create New Notebook</span>
         <CommandShortcut>⌘N</CommandShortcut>
       </CommandItem>

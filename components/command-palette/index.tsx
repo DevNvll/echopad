@@ -1,21 +1,25 @@
 import React from 'react'
 import { Command } from 'cmdk'
+import { Search, ArrowRight } from 'lucide-react'
 import { Note } from '../../types'
 import { CommandInput } from './CommandInput'
 import { CommandFooter } from './CommandFooter'
+import { CommandItem } from './CommandItem'
 import { useCommandSearch } from './hooks/useCommandSearch'
 import {
   AppCommandsGroup,
   NotebooksGroup,
   TagsGroup,
-  SearchResultsGroup
+  SearchResultsGroup,
+  RecentSearchesGroup
 } from './groups'
 import {
   useVaultStore,
   useNotebookStore,
   useNotesStore,
   useTagsStore,
-  useUIStore
+  useUIStore,
+  useSearchStore
 } from '../../stores'
 
 export const CommandPalette: React.FC = () => {
@@ -28,7 +32,8 @@ export const CommandPalette: React.FC = () => {
     commandInitialSearch,
     closeCommand,
     openCreateModal,
-    openSettings
+    openSettings,
+    openSearch
   } = useUIStore()
 
   const { search, setSearch, results, filteredTags } = useCommandSearch({
@@ -37,6 +42,18 @@ export const CommandPalette: React.FC = () => {
     allTags,
     initialSearch: commandInitialSearch
   })
+
+  const {
+    recentSearches,
+    loadRecentSearches,
+    removeRecentSearch
+  } = useSearchStore()
+
+  React.useEffect(() => {
+    if (isCommandOpen) {
+      loadRecentSearches()
+    }
+  }, [isCommandOpen, loadRecentSearches])
 
   const handleClose = () => closeCommand()
 
@@ -65,6 +82,11 @@ export const CommandPalette: React.FC = () => {
     handleClose()
   }
 
+  const handleOpenSearch = (query?: string) => {
+    openSearch(query)
+    handleClose()
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.ctrlKey && e.key === 'j') {
       e.preventDefault()
@@ -81,6 +103,8 @@ export const CommandPalette: React.FC = () => {
       )
     }
   }
+
+  const hasSearchQuery = search.trim().length > 0
 
   return (
     <Command.Dialog
@@ -99,11 +123,35 @@ export const CommandPalette: React.FC = () => {
           No results found.
         </Command.Empty>
 
+        {hasSearchQuery && (
+          <Command.Group>
+            <CommandItem
+              onSelect={() => handleOpenSearch(search)}
+              className="bg-brand/10 border border-brand/20 mb-2"
+            >
+              <Search className="mr-2 h-4 w-4 text-brand" />
+              <span className="flex-1">
+                Search all notes for "<span className="font-medium text-brand">{search}</span>"
+              </span>
+              <ArrowRight className="h-4 w-4 text-brand/60" />
+            </CommandItem>
+          </Command.Group>
+        )}
+
         <AppCommandsGroup
           onCreateNotebook={handleCreateNotebook}
           onOpenSettings={handleOpenSettings}
+          onOpenSearch={() => handleOpenSearch()}
           onClose={handleClose}
         />
+
+        {!hasSearchQuery && recentSearches.length > 0 && (
+          <RecentSearchesGroup
+            searches={recentSearches}
+            onSelectSearch={handleOpenSearch}
+            onRemoveSearch={removeRecentSearch}
+          />
+        )}
 
         <NotebooksGroup
           notebooks={notebooks}
@@ -113,7 +161,7 @@ export const CommandPalette: React.FC = () => {
 
         <TagsGroup
           tags={filteredTags}
-          onSelectTag={(tag) => setSearch(`#${tag}`)}
+          onSelectTag={(tag) => handleOpenSearch(`#${tag}`)}
         />
 
         <SearchResultsGroup
