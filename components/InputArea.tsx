@@ -8,14 +8,18 @@ import {
   useNotesStore,
   useTagsStore
 } from '../stores'
+import { useCommandStore } from '../stores/commandStore'
 import { useMarkdownComponents } from './message-list/useMarkdownComponents'
 import { Button } from '@/components/ui/button'
+import { CommandAutocomplete } from './CommandAutocomplete'
+import { CommandContext } from '../types/chatCommands'
 
 export const InputArea: React.FC = () => {
   const { vaultPath } = useVaultStore()
   const { activeNotebook, currentNotebook } = useNotebookStore()
   const { createNote } = useNotesStore()
   const { syncNoteTags } = useTagsStore()
+  const { executeCommand } = useCommandStore()
 
   const notebook = currentNotebook()
   const channelName = notebook?.name || 'unknown'
@@ -24,11 +28,100 @@ export const InputArea: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isPreviewMode, setIsPreviewMode] = useState(false)
+  const [showCommandAutocomplete, setShowCommandAutocomplete] = useState(false)
+  const [commandError, setCommandError] = useState<string | null>(null)
+  const [inputContainerHeight, setInputContainerHeight] = useState(0)
+  const [commandPlaceholder, setCommandPlaceholder] = useState<string>('')
+  const errorContentRef = useRef<string>('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const inputContainerRef = useRef<HTMLDivElement>(null)
 
   // Reuse existing markdown rendering components
   const markdownComponents = useMarkdownComponents(vaultPath)
+
+  useEffect(() => {
+    const trimmed = content.trim()
+    const isCommand = trimmed.startsWith('/') && !trimmed.startsWith('//')
+    setShowCommandAutocomplete(isCommand)
+
+    if (isCommand) {
+      const withoutSlash = trimmed.slice(1)
+      const parts = withoutSlash.split(/\s+/).filter(Boolean)
+      const commandName = parts[0]?.toLowerCase()
+
+      if (commandName && withoutSlash.includes(' ')) {
+        const { getCommand } = useCommandStore.getState()
+        const command = getCommand(commandName)
+
+        if (command?.usage) {
+          const usageParts = command.usage.split(/\s+/).slice(1)
+          const currentArgCount = parts.length - 1
+
+          if (currentArgCount < usageParts.length) {
+            const nextArg = usageParts[currentArgCount]
+            setCommandPlaceholder(nextArg || '')
+          } else {
+            setCommandPlaceholder('')
+          }
+        } else {
+          setCommandPlaceholder('')
+        }
+      } else {
+        setCommandPlaceholder('')
+      }
+    } else {
+      setCommandPlaceholder('')
+    }
+  }, [content])
+
+  useEffect(() => {
+    if (commandError && content !== errorContentRef.current) {
+      setCommandError(null)
+      errorContentRef.current = ''
+    }
+  }, [content, commandError])
+
+  const handleCommandExecution = async (commandString: string) => {
+    const context: CommandContext = {
+      notebookName: activeNotebook,
+      vaultPath,
+    }
+
+    setCommandError(null)
+    errorContentRef.current = ''
+
+    try {
+      const result = await executeCommand(commandString, context)
+
+      if (!result.success) {
+        if (result.message) {
+          setCommandError(result.message)
+          errorContentRef.current = content
+        }
+        return
+      }
+
+      if (result.insertContent !== undefined) {
+        setContent(result.insertContent)
+        setTimeout(() => textareaRef.current?.focus(), 0)
+      }
+
+      if (result.createNote && result.noteContent) {
+        await createNote(vaultPath!, activeNotebook!, result.noteContent)
+      }
+
+      if (result.clearInput) {
+        setContent('')
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Command execution failed'
+      setCommandError(errorMessage)
+      errorContentRef.current = content
+      console.error('Command execution error:', error)
+    }
+  }
 
   // Auto-resize textarea based on content (only when not expanded)
   useEffect(() => {
@@ -74,8 +167,31 @@ export const InputArea: React.FC = () => {
     }
   }, [activeNotebook])
 
+  useEffect(() => {
+    const container = inputContainerRef.current
+    if (!container) return
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setInputContainerHeight(entry.contentRect.height)
+      }
+    })
+
+    resizeObserver.observe(container)
+    setInputContainerHeight(container.offsetHeight)
+
+    return () => resizeObserver.disconnect()
+  }, [])
+
   const handleSendMessage = async () => {
     if (!vaultPath || !activeNotebook || !content.trim()) return
+
+    const trimmed = content.trim()
+    if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+      await handleCommandExecution(trimmed)
+      return
+    }
+
     const newNote = await createNote(vaultPath, activeNotebook, content)
     await syncNoteTags(newNote)
     setContent('')
@@ -83,6 +199,18 @@ export const InputArea: React.FC = () => {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showCommandAutocomplete && !isPreviewMode && ['ArrowDown', 'ArrowUp', 'Tab', 'Escape'].includes(e.key)) {
+      if (e.key === 'Tab') {
+        e.preventDefault()
+      }
+      return
+    }
+
+    if (isPreviewMode && showCommandAutocomplete && !['Escape', 'Enter'].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+      setIsPreviewMode(false)
+      return
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
@@ -177,9 +305,58 @@ export const InputArea: React.FC = () => {
   }
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 flex justify-center w-full z-20 pointer-events-none">
+    <div className="absolute bottom-0 left-0 right-0 flex justify-center w-full z-30 pointer-events-none">
+      {commandError && (
+        <div className="absolute left-0 right-0 mx-auto w-full max-w-4xl mb-1 pointer-events-auto z-40"
+          style={{ bottom: `${inputContainerHeight + 8}px` }}
+        >
+          <div className="mx-4 px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3 shadow-lg">
+            <span className="text-red-400 text-sm flex-shrink-0 mt-0.5">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-red-300 leading-relaxed whitespace-pre-line">{commandError}</p>
+            </div>
+            <button
+              onClick={() => {
+                setCommandError(null)
+                errorContentRef.current = ''
+              }}
+              className="text-red-400 hover:text-red-300 flex-shrink-0 p-1 -m-1 transition-colors"
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCommandAutocomplete && (
+        <CommandAutocomplete
+          input={content}
+          onSelect={(command, fullCommand) => {
+            setContent(fullCommand)
+            setIsPreviewMode(false)
+            setTimeout(() => textareaRef.current?.focus(), 0)
+          }}
+          onClose={() => setShowCommandAutocomplete(false)}
+          onExitPreview={() => {
+            setIsPreviewMode(false)
+            setTimeout(() => textareaRef.current?.focus(), 0)
+          }}
+          bottomOffset={inputContainerHeight + (commandError ? 60 : 0)}
+          isExpanded={isExpanded}
+          isPreviewMode={isPreviewMode}
+        />
+      )}
+
       <div
-        className={`w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x border-border/60 rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden pointer-events-auto focus-within:shadow-[0_0_15px_-5px_color-mix(in_srgb,var(--accent-color)_20%,transparent)] focus-within:border-brand/30 transition-all duration-300 ease-out ${isExpanded ? 'h-[60vh]' : ''}`}
+        ref={inputContainerRef}
+        className={`w-full max-w-4xl bg-surfaceHighlight/80 backdrop-blur-xl border-t border-x rounded-t-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden pointer-events-auto transition-all duration-300 ease-out ${
+          isExpanded ? 'h-[60vh]' : ''
+        } ${
+          showCommandAutocomplete
+            ? 'border-purple-500/60 focus-within:border-purple-500/80 shadow-[0_0_20px_-5px_rgba(168,85,247,0.4)]'
+            : 'border-border/60 focus-within:border-brand/30 focus-within:shadow-[0_0_15px_-5px_color-mix(in_srgb,var(--accent-color)_20%,transparent)]'
+        }`}
       >
         <div className={`px-4 pt-4 pb-2 ${isExpanded ? 'flex-1 flex flex-col min-h-0' : ''}`}>
           {isPreviewMode ? (
@@ -202,7 +379,13 @@ export const InputArea: React.FC = () => {
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              placeholder={`Type your message here...`}
+              placeholder={
+                commandPlaceholder
+                  ? commandPlaceholder
+                  : showCommandAutocomplete
+                  ? 'Type command or select from list...'
+                  : 'Type your message here...'
+              }
               rows={1}
               autoComplete="off"
               className={`w-full bg-transparent text-textMain placeholder-textMuted/40 resize-none outline-none text-[15px] leading-relaxed overflow-y-auto font-sans custom-scrollbar transition-all duration-300 ${isExpanded ? 'flex-1 min-h-0' : 'min-h-[40px] max-h-[300px]'}`}
@@ -212,6 +395,12 @@ export const InputArea: React.FC = () => {
 
         <div className="flex items-center justify-between px-3 pb-3 mt-1">
           <div className="flex items-center gap-1">
+            {showCommandAutocomplete && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded text-purple-400 text-xs mr-1">
+                <span className="font-mono">/</span>
+                <span>command mode</span>
+              </div>
+            )}
             <input
               ref={fileInputRef}
               type="file"

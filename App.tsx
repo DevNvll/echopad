@@ -37,6 +37,8 @@ import {
   useRouterStore,
   useKeybindsStore
 } from './stores'
+import { registerBuiltInCommands } from './commands'
+import { Toaster } from 'sonner'
 
 function App() {
   const {
@@ -146,6 +148,7 @@ function App() {
   useEffect(() => {
     initialize()
     loadKeybinds()
+    registerBuiltInCommands()
   }, [initialize, loadKeybinds])
 
   // Check for updates on startup (with delay to not block initial render)
@@ -356,6 +359,25 @@ function App() {
 
   return (
     <ThemeProvider initialSettings={appSettings} vaultPath={vaultPath}>
+      <Toaster
+        position="top-right"
+        theme="dark"
+        richColors
+        closeButton
+        toastOptions={{
+          style: {
+            background: 'rgba(10, 10, 10, 0.95)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(39, 39, 42, 0.6)',
+            color: '#fafafa',
+            boxShadow: '0 10px 40px -15px rgba(0, 0, 0, 0.5)',
+          },
+          classNames: {
+            closeButton: '!bg-transparent !border-transparent !text-zinc-500 hover:!text-zinc-300 hover:!bg-white/5',
+          },
+        }}
+      />
       <div className="h-screen w-screen bg-transparent font-sans text-textMain">
         <div
           className="flex flex-col h-full w-full overflow-hidden rounded-lg border border-border/50 bg-background"

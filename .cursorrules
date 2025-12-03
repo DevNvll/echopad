@@ -1,0 +1,492 @@
+# Echopad Cursor Rules
+
+## Project Overview
+
+Echopad is a local-first desktop note-taking application built with Tauri (Rust) and React (TypeScript). Follow these architectural patterns and conventions when making changes.
+
+## Architecture Principles
+
+### Local-First Design
+- Notes are stored as plain markdown files in user-selected vault directories
+- All data operations should work offline
+- SQLite is used only for metadata, not note content
+- Never assume network connectivity for core features
+
+### Data Flow Pattern
+Always follow this unidirectional flow:
+1. User Action → Component Event Handler
+2. Component → Zustand Store Action
+3. Store → API Layer (api.ts)
+4. API → Tauri IPC (invoke)
+5. Rust Backend → File System/Database
+6. Store State Update → Component Re-render
+
+### Layer Separation
+- **Components**: Pure UI, no business logic
+- **Stores**: State management and orchestration
+- **API Layer**: Tauri IPC calls and database operations
+- **Rust Backend**: File operations and system-level logic
+
+## Technology Stack
+
+### Frontend
+- React 19 with React Compiler (automatic optimizations)
+- TypeScript (strict mode)
+- Zustand for state management (NOT Redux)
+- Tailwind CSS for styling (utility-first)
+- TanStack Query for server state (if needed)
+- TanStack Virtual for large lists
+- Radix UI for accessible primitives
+- Lucide React for icons
+
+### Backend
+- Rust with Tauri 2
+- SQLite via @tauri-apps/plugin-sql
+- File system operations via Tauri APIs
+
+## State Management
+
+### Zustand Stores
+- All global state lives in Zustand stores in `stores/`
+- Each store should have a clear, single responsibility
+- Store naming: `*Store.ts` (e.g., `notesStore.ts`)
+- Export hook: `use*Store` (e.g., `useNotesStore`)
+
+### Store Structure
+```typescript
+interface StoreState {
+  // State properties
+  data: DataType[]
+  isLoading: boolean
+  
+  // Actions
+  loadData: () => Promise<void>
+  updateData: (id: string) => Promise<void>
+}
+
+export const useStore = create<StoreState>((set, get) => ({
+  // Initial state
+  data: [],
+  isLoading: false,
+  
+  // Actions
+  loadData: async () => {
+    set({ isLoading: true })
+    const data = await api.loadData()
+    set({ data, isLoading: false })
+  }
+}))
+```
+
+### Store Guidelines
+- Never mutate state directly - always use `set()`
+- Async actions should handle loading/error states
+- Keep stores focused - one store per domain (vault, notes, sync, etc.)
+- Use `get()` for accessing current state within actions
+
+## Component Patterns
+
+### Component Structure
+```typescript
+// Component file: components/FeatureName.tsx
+import { useStore } from '../stores'
+
+interface FeatureNameProps {
+  // Props
+}
+
+export function FeatureName({ ...props }: FeatureNameProps) {
+  const { data, loadData } = useStore()
+  
+  // Effects, handlers, etc.
+  
+  return (
+    // JSX
+  )
+}
+```
+
+### Component Guidelines
+- Use functional components with hooks
+- Extract reusable logic to custom hooks in `hooks/`
+- Keep components small and focused
+- Use TypeScript interfaces for props
+- Prefer composition over inheritance
+- Use Tailwind classes, avoid inline styles
+- Use Lucide React icons (not other icon libraries)
+
+### Component Organization
+- Feature components: `components/feature-name/`
+- Reusable UI: `components/ui/`
+- Dashboard widgets: `components/dashboard/`
+- Modals: `components/modals/`
+- Sync components: `components/sync/`
+
+## API Layer Patterns
+
+### Tauri IPC Calls
+All backend communication goes through `api.ts`:
+```typescript
+// In api.ts
+export async function createNote(
+  vaultPath: string,
+  notebookPath: string,
+  content: string
+): Promise<Note> {
+  const result = await invoke<RawNote>('create_note', {
+    vaultPath,
+    notebookPath,
+    content
+  })
+  
+  // Transform and return
+  return transformNote(result)
+}
+```
+
+### API Guidelines
+- All Tauri IPC calls must go through `api.ts`
+- Never call `invoke()` directly from components or stores
+- Transform Rust types to TypeScript types in API layer
+- Handle errors at API layer, throw typed errors
+- Extract tags/URLs from note content in API layer
+
+## Data Storage
+
+### File System
+- Notes: `.md` files in `vault/notebooks/NotebookName/`
+- Images: `vault/notebooks/NotebookName/media/`
+- Never hardcode paths - use vault path from store
+- Always use relative paths within vault
+
+### SQLite Database
+- Database: `echopad.db` in app data directory
+- Use `@tauri-apps/plugin-sql` for database access
+- Always use parameterized queries (prevent SQL injection)
+- Tables: settings, pinned_notebooks, note_tags, favorite_notes, og_cache, etc.
+- See `docs/ARCHITECTURE.md` for full schema
+
+### Database Guidelines
+- Use `getDb()` helper from `api.ts` for database access
+- Wrap database operations in try/catch
+- Use transactions for multi-step operations
+- Index frequently queried columns (tags, etc.)
+
+## Routing & Navigation
+
+### Router Store
+- Use `routerStore` for navigation
+- Routes: `dashboard`, `notebook`, `search`, `empty`
+- Never use React Router - use custom router store
+- Navigation triggers component changes in `MainContent`
+
+### Route Structure
+```typescript
+type Route = 
+  | { type: 'dashboard' }
+  | { type: 'notebook'; notebookPath: string }
+  | { type: 'search'; query?: string }
+  | { type: 'empty' }
+```
+
+## Styling Guidelines
+
+### Tailwind CSS
+- Use Tailwind utility classes exclusively
+- Use design tokens from `index.css` (--accent-color, etc.)
+- Use `clsx` for conditional classes
+- Use `tailwind-merge` when combining classes dynamically
+- Follow existing spacing/color patterns
+
+### Design Tokens
+- Colors: Use CSS variables (--accent-color, --textMain, --background, etc.)
+- Spacing: Use Tailwind spacing scale
+- Typography: Use Tailwind font utilities
+- Borders: Use `border-border/50` pattern
+
+## Error Handling
+
+### Error Patterns
+- Handle errors at appropriate layer:
+  - API layer: Catch Tauri errors, throw typed errors
+  - Store layer: Catch API errors, set error state
+  - Component layer: Display error messages
+- Use try/catch for async operations
+- Log errors with context (console.error)
+- Show user-friendly error messages
+
+## Performance Considerations
+
+### Virtual Scrolling
+- Use `@tanstack/react-virtual` for large lists (notes, search results)
+- Always virtualize lists with 100+ items
+- See `MessageList.tsx` for example
+
+### Pagination
+- Load notes in pages of 100
+- Use `loadMoreNotes()` pattern for infinite scroll
+- Store metadata separately from full note content
+
+### Caching
+- Cache OpenGraph metadata for 7 days
+- Cache tag index in SQLite
+- Use React Query for server state caching (if needed)
+
+## Security Guidelines
+
+### Input Validation
+- Sanitize file paths (prevent directory traversal)
+- Use parameterized SQL queries (prevent injection)
+- Validate user input before processing
+- Escape user content in markdown rendering
+
+### Sync Security
+- Never log sensitive data (passwords, keys)
+- Use encryption for sync (XChaCha20-Poly1305)
+- Store credentials securely (use Tauri secure storage)
+- Follow zero-knowledge principles for sync
+
+## File Structure Conventions
+
+### Frontend Structure
+```
+components/
+  feature-name/     # Feature-specific components
+    Component.tsx
+    index.ts
+  ui/               # Reusable UI primitives
+stores/             # Zustand stores
+hooks/              # Custom React hooks
+utils/              # Utility functions
+types.ts            # TypeScript types
+api.ts              # API layer
+```
+
+### Naming Conventions
+- Components: PascalCase (`MessageList.tsx`)
+- Stores: camelCase (`notesStore.ts`)
+- Hooks: camelCase with `use` prefix (`useKeyboardShortcuts.ts`)
+- Utilities: camelCase (`formatting.ts`)
+- Types: PascalCase interfaces/types
+
+## React Patterns
+
+### Hooks Usage
+- Prefer custom hooks for reusable logic
+- Extract complex useEffect logic to hooks
+- Use React Compiler optimizations (automatic)
+- Follow React 19 patterns
+
+### Effect Guidelines
+- Minimize useEffect usage (see React rules)
+- Prefer derived state over effects
+- Use effects only for side effects (file watching, subscriptions)
+- Clean up subscriptions in effect cleanup
+
+### State Updates
+- Use Zustand for global state
+- Use useState for local component state
+- Use useMemo for expensive computations
+- Use useCallback for stable function references
+
+## Tauri Patterns
+
+### IPC Commands
+- Define commands in Rust (`src-tauri/src/lib.rs` or modules)
+- Use typed interfaces for command parameters
+- Return typed results from commands
+- Handle errors in Rust, return Result types
+
+### File Operations
+- Use Tauri file system APIs
+- Never use Node.js fs module
+- Use async/await for file operations
+- Handle file system errors gracefully
+
+## Testing Considerations
+
+### Current State
+- Manual testing during development
+- No automated test suite yet
+
+### Future Testing
+- Unit tests for stores and utilities
+- Integration tests for API layer
+- E2E tests for critical flows
+- Sync tests for conflict resolution
+
+## Code Quality
+
+### TypeScript
+- Use strict TypeScript
+- Define interfaces for all data structures
+- Avoid `any` type
+- Use type assertions sparingly
+- Export types from `types.ts`
+
+### Code Style
+- Use 2 spaces for indentation
+- Use semicolons
+- Use single quotes for strings (or double, be consistent)
+- Use trailing commas in objects/arrays
+- Keep functions small and focused
+
+### Comments
+- Write self-documenting code
+- Add comments for complex logic
+- Document public APIs
+- Keep comments up-to-date
+
+## Sync Architecture
+
+### Sync Patterns
+- Sync is optional - never require it
+- Use `syncStore` for sync state
+- Sync operations go through Rust backend
+- Handle sync errors gracefully
+- Show sync status in UI
+
+### Sync Guidelines
+- Never sync sensitive data without encryption
+- Use zero-knowledge architecture
+- Handle conflicts with user resolution
+- Background sync should not block UI
+
+## Common Patterns
+
+### Note Operations
+```typescript
+// Creating a note
+const note = await notesStore.createNote(vaultPath, notebookPath, content)
+
+// Updating a note
+const updated = await notesStore.updateNote(vaultPath, notebookPath, filename, content)
+
+// Deleting a note
+await notesStore.deleteNote(vaultPath, notebookPath, filename)
+```
+
+### Notebook Operations
+```typescript
+// Creating a notebook
+const notebook = await notebookStore.createNotebook(vaultPath, name, parentPath)
+
+// Selecting a notebook
+notebookStore.selectNotebook(notebookPath)
+
+// Loading notes for notebook
+await notesStore.loadNotes(vaultPath, notebookPath)
+```
+
+### Search Patterns
+```typescript
+// Setting search query
+searchStore.setQuery(query)
+
+// Applying filters
+searchStore.setFilters({ tags: ['tag1'], dateRange: { from, to } })
+
+// Performing search
+await searchStore.performSearch(vaultPath)
+```
+
+## Migration & Breaking Changes
+
+### Database Migrations
+- Add migration logic in `getDb()` function
+- Use `ALTER TABLE` with `.catch()` for idempotent migrations
+- Document schema changes in `docs/ARCHITECTURE.md`
+
+### API Changes
+- Maintain backward compatibility when possible
+- Version API changes if breaking
+- Update types in `types.ts`
+- Update stores if API changes
+
+## Documentation
+
+### Code Documentation
+- Document complex functions
+- Add JSDoc comments for public APIs
+- Keep README updated
+- Update architecture docs when patterns change
+
+### Architecture Docs
+- `docs/PRODUCT_OVERVIEW.md` - Feature list
+- `docs/ARCHITECTURE.md` - Technical architecture
+- `docs/PROJECT_ARCHITECTURE.md` - System architecture
+- `docs/sync/ARCHITECTURE.md` - Sync architecture
+
+## When Adding Features
+
+### Checklist
+1. ✅ Define types in `types.ts`
+2. ✅ Add API functions in `api.ts` (if backend needed)
+3. ✅ Create/update Zustand store
+4. ✅ Create React components
+5. ✅ Add routing (if new route needed)
+6. ✅ Update documentation
+7. ✅ Test manually
+8. ✅ Handle errors gracefully
+
+### Feature Patterns
+- **New Note Type**: Add to types, update API, update stores
+- **New UI Component**: Create in appropriate `components/` folder
+- **New Store**: Create in `stores/`, export from `stores/index.ts`
+- **New Hook**: Create in `hooks/`, export from `hooks/index.ts`
+- **New Tauri Command**: Add to Rust backend, expose via IPC
+
+## Anti-Patterns to Avoid
+
+❌ Don't call `invoke()` directly from components
+❌ Don't mutate Zustand state directly
+❌ Don't use React Router
+❌ Don't store note content in SQLite
+❌ Don't assume network connectivity
+❌ Don't use inline styles
+❌ Don't use class components
+❌ Don't use Redux (use Zustand)
+❌ Don't hardcode file paths
+❌ Don't skip error handling
+
+## Quick Reference
+
+### Import Patterns
+```typescript
+// Stores
+import { useNotesStore, useVaultStore } from '../stores'
+
+// API
+import { createNote, listNotes } from '../api'
+
+// Types
+import { Note, Notebook } from '../types'
+
+// Components
+import { Button } from '@/components/ui/button'
+
+// Icons
+import { Plus, Trash } from 'lucide-react'
+```
+
+### Common Utilities
+```typescript
+// Formatting
+import { extractTags, extractUrls } from '../utils/formatting'
+
+// Search
+import { searchNotes } from '../utils/search'
+
+// Styling
+import { clsx } from 'clsx'
+```
+
+## Questions?
+
+Refer to:
+- `docs/ARCHITECTURE.md` for technical details
+- `docs/PROJECT_ARCHITECTURE.md` for system design
+- `docs/PRODUCT_OVERVIEW.md` for feature list
+- Existing code for patterns and examples
+
+

@@ -3,6 +3,7 @@ import { appDataDir, join } from '@tauri-apps/api/path'
 import Database from '@tauri-apps/plugin-sql'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import { Note, NoteMetadata, Notebook, AppSettings, OgMetadata } from './types'
+import { Reminder, ReminderFilter } from './types/reminders'
 import { extractTags, extractUrls } from './utils/formatting'
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -95,6 +96,20 @@ async function getDb(): Promise<Database> {
         cached_at INTEGER
       )
     `)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS reminders (
+        id TEXT PRIMARY KEY,
+        message TEXT NOT NULL,
+        due_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        notebook_path TEXT,
+        completed INTEGER DEFAULT 0,
+        notified INTEGER DEFAULT 0
+      )
+    `)
+    await db.execute(
+      `CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at, completed, notified)`
+    )
   }
   return db
 }
@@ -1010,4 +1025,125 @@ export async function fetchOgMetadata(url: string): Promise<OgMetadata> {
 export async function clearOgCache(): Promise<void> {
   const database = await getDb()
   await database.execute('DELETE FROM og_cache')
+}
+
+// Reminders
+
+export async function createReminder(
+  message: string,
+  dueAt: number,
+  notebookPath?: string
+): Promise<Reminder> {
+  const database = await getDb()
+
+  const id = crypto.randomUUID()
+  const now = Date.now()
+
+  await database.execute(
+    `INSERT INTO reminders (id, message, due_at, created_at, notebook_path, completed, notified)
+     VALUES (?, ?, ?, ?, ?, 0, 0)`,
+    [id, message, dueAt, now, notebookPath || null]
+  )
+
+  return {
+    id,
+    message,
+    dueAt,
+    createdAt: now,
+    notebookPath,
+    completed: false,
+    notified: false,
+  }
+}
+
+export async function listReminders(filter?: ReminderFilter): Promise<Reminder[]> {
+  const database = await getDb()
+
+  let query = 'SELECT * FROM reminders WHERE 1=1'
+  const params: any[] = []
+
+  if (filter?.completed !== undefined) {
+    query += ' AND completed = ?'
+    params.push(filter.completed ? 1 : 0)
+  }
+
+  if (filter?.upcoming) {
+    const next24Hours = Date.now() + 24 * 60 * 60 * 1000
+    query += ' AND due_at <= ? AND due_at > ? AND completed = 0'
+    params.push(next24Hours, Date.now())
+  }
+
+  if (filter?.overdue) {
+    query += ' AND due_at < ? AND completed = 0'
+    params.push(Date.now())
+  }
+
+  query += ' ORDER BY due_at ASC'
+
+  const result = await database.select<any[]>(query, params)
+
+  return result.map((row) => ({
+    id: row.id,
+    message: row.message,
+    dueAt: row.due_at,
+    createdAt: row.created_at,
+    notebookPath: row.notebook_path,
+    completed: row.completed === 1,
+    notified: row.notified === 1,
+  }))
+}
+
+export async function getReminder(id: string): Promise<Reminder | null> {
+  const database = await getDb()
+
+  const result = await database.select<any[]>('SELECT * FROM reminders WHERE id = ?', [id])
+
+  if (result.length === 0) {
+    return null
+  }
+
+  const row = result[0]
+  return {
+    id: row.id,
+    message: row.message,
+    dueAt: row.due_at,
+    createdAt: row.created_at,
+    notebookPath: row.notebook_path,
+    completed: row.completed === 1,
+    notified: row.notified === 1,
+  }
+}
+
+export async function completeReminder(id: string): Promise<void> {
+  const database = await getDb()
+  await database.execute('UPDATE reminders SET completed = 1 WHERE id = ?', [id])
+}
+
+export async function deleteReminder(id: string): Promise<void> {
+  const database = await getDb()
+  await database.execute('DELETE FROM reminders WHERE id = ?', [id])
+}
+
+export async function markReminderNotified(id: string): Promise<void> {
+  const database = await getDb()
+  await database.execute('UPDATE reminders SET notified = 1 WHERE id = ?', [id])
+}
+
+export async function getDueReminders(): Promise<Reminder[]> {
+  const database = await getDb()
+
+  const result = await database.select<any[]>(
+    'SELECT * FROM reminders WHERE due_at <= ? AND completed = 0 AND notified = 0 ORDER BY due_at ASC',
+    [Date.now()]
+  )
+
+  return result.map((row) => ({
+    id: row.id,
+    message: row.message,
+    dueAt: row.due_at,
+    createdAt: row.created_at,
+    notebookPath: row.notebook_path,
+    completed: row.completed === 1,
+    notified: row.notified === 1,
+  }))
 }

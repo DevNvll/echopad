@@ -5,6 +5,7 @@ import { RecentNotes } from './dashboard/RecentNotes'
 import { FavoriteNotes } from './dashboard/FavoriteNotes'
 import { PinnedNotebooks } from './dashboard/PinnedNotebooks'
 import { TagCloud } from './dashboard/TagCloud'
+import { UpcomingReminders } from './dashboard/UpcomingReminders'
 import { Button } from '@/components/ui/button'
 import {
   useVaultStore,
@@ -93,6 +94,8 @@ export function Dashboard({
             <RecentNotes notes={recentNotes} onNoteClick={handleNoteClick} />
 
             <div className="space-y-6">
+              <UpcomingReminders />
+
               <FavoriteNotes
                 notes={favoriteNotes}
                 onNoteClick={handleNoteClick}

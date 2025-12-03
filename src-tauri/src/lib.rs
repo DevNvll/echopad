@@ -3,7 +3,7 @@ use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, menu::{MenuBuilder, MenuItemBuilder}, tray::{TrayIconBuilder, TrayIconEvent}};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 mod sync;
@@ -446,6 +446,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             // Initialize sync state
             let app_data_dir = app.path().app_data_dir()
@@ -457,7 +459,7 @@ pub fn run() {
             // Set up global shortcut
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
             let app_handle = app.handle().clone();
-            
+
             // Handle shortcut registration gracefully - don't crash if keybind is already taken
             if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
@@ -466,8 +468,60 @@ pub fn run() {
             }) {
                 eprintln!("[Warning] Failed to register global shortcut (Alt+Space): {}. The shortcut may already be in use by another application.", e);
             }
-            
+
+            // Set up system tray
+            let show_item = MenuItemBuilder::with_id("show", "Show").build(app)?;
+            let hide_item = MenuItemBuilder::with_id("hide", "Hide").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+
+            let menu = MenuBuilder::new(app)
+                .items(&[&show_item, &hide_item, &quit_item])
+                .build()?;
+
+            let _tray = TrayIconBuilder::new()
+                .menu(&menu)
+                .icon(app.default_window_icon().unwrap().clone())
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "hide" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.hide();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Single click shows the window
+                    if let TrayIconEvent::Click { button, .. } = event {
+                        if button == tauri::tray::MouseButton::Left {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Prevent default close and hide to tray instead
+                window.hide().unwrap();
+                api.prevent_close();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             list_notebooks,

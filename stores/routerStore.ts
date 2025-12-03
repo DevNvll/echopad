@@ -36,3 +36,4 @@ export const useRouterStore = create<RouterState>((set, get) => ({
   isRoute: (type) => get().currentRoute.type === type
 }))
 
+

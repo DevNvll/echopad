@@ -47,6 +47,16 @@
     "process:allow-exit",
     "global-shortcut:default",
     "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister"
+    "global-shortcut:allow-unregister",
+    "notification:default",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
+    "notification:allow-notify",
+    "notification:allow-register-action-types",
+    "notification:allow-register-listener",
+    "shell:default",
+    "shell:allow-open",
+    "core:tray:default",
+    "core:menu:default"
   ]
 }

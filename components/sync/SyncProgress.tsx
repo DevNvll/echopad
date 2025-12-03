@@ -41,3 +41,4 @@ export function SyncProgress({ vaultPath }: SyncProgressProps) {
 }
 
 
+
