@@ -31,7 +31,7 @@ export function SearchPage({
   const { allNotebooks, selectNotebook } = useNotebookStore()
   const { setTarget } = useNotesStore()
   const { allTags } = useTagsStore()
-  const { currentRoute, navigateToDashboard } = useRouterStore()
+  const { currentRoute, navigateToDashboard, navigateToNotebook } = useRouterStore()
   const [showFilters, setShowFilters] = useState(true)
 
   const searchQuery =
@@ -101,6 +101,7 @@ export function SearchPage({
     if (note.notebookName) {
       setTarget(note.filename)
       selectNotebook(note.notebookName)
+      navigateToNotebook(note.notebookName)
       resetSearch()
     }
   }

@@ -4,6 +4,7 @@ import { NoNotebookSelected } from './NoNotebookSelected'
 import { NotebookHeader } from './NotebookHeader'
 import { MessageList } from './MessageList'
 import { InputArea } from './InputArea'
+import { KanbanView } from './kanban'
 import { openNotebookInExplorer } from '../api'
 import {
   useRouterStore,
@@ -59,6 +60,15 @@ export function MainContent({
             </div>
           </div>
         </>
+      )
+
+    case 'board':
+      return (
+        <KanbanView
+          boardFilename={currentRoute.boardFilename}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={onToggleSidebar}
+        />
       )
 
     case 'dashboard':

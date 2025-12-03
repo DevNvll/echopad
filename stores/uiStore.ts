@@ -1,12 +1,12 @@
 import { create } from 'zustand'
-import { Notebook, Note } from '../types'
+import { Notebook, Note, BoardMetadata } from '../types'
 import { SettingsSection } from '../components/SettingsModal'
 
 interface ContextMenu {
   x: number
   y: number
-  type: 'notebook' | 'message'
-  data: Notebook | Note
+  type: 'notebook' | 'message' | 'board'
+  data: Notebook | Note | BoardMetadata
 }
 
 interface UIState {
@@ -23,8 +23,11 @@ interface UIState {
   isCreateModalOpen: boolean
   isEditModalOpen: boolean
   isDeleteModalOpen: boolean
+  isCreateBoardModalOpen: boolean
+  isEditBoardModalOpen: boolean
   targetNotebook: Notebook | null
   parentNotebook: Notebook | null
+  targetBoard: BoardMetadata | null
 
   openCommand: (initialSearch?: string) => void
   closeCommand: () => void
@@ -48,6 +51,10 @@ interface UIState {
   closeEditModal: () => void
   openDeleteModal: (notebook: Notebook) => void
   closeDeleteModal: () => void
+  openCreateBoardModal: () => void
+  closeCreateBoardModal: () => void
+  openEditBoardModal: (board: BoardMetadata) => void
+  closeEditBoardModal: () => void
   closeAllModals: () => void
 }
 
@@ -65,8 +72,11 @@ export const useUIStore = create<UIState>((set) => ({
   isCreateModalOpen: false,
   isEditModalOpen: false,
   isDeleteModalOpen: false,
+  isCreateBoardModalOpen: false,
+  isEditBoardModalOpen: false,
   targetNotebook: null,
   parentNotebook: null,
+  targetBoard: null,
 
   openCommand: (initialSearch = '') =>
     set({ isCommandOpen: true, commandInitialSearch: initialSearch }),
@@ -105,6 +115,12 @@ export const useUIStore = create<UIState>((set) => ({
     set({ isDeleteModalOpen: true, targetNotebook: notebook }),
   closeDeleteModal: () =>
     set({ isDeleteModalOpen: false, targetNotebook: null }),
+  openCreateBoardModal: () => set({ isCreateBoardModalOpen: true }),
+  closeCreateBoardModal: () => set({ isCreateBoardModalOpen: false }),
+  openEditBoardModal: (board) =>
+    set({ isEditBoardModalOpen: true, targetBoard: board }),
+  closeEditBoardModal: () =>
+    set({ isEditBoardModalOpen: false, targetBoard: null }),
   closeAllModals: () =>
     set({
       isCommandOpen: false,
@@ -114,8 +130,11 @@ export const useUIStore = create<UIState>((set) => ({
       isCreateModalOpen: false,
       isEditModalOpen: false,
       isDeleteModalOpen: false,
+      isCreateBoardModalOpen: false,
+      isEditBoardModalOpen: false,
       targetNotebook: null,
       parentNotebook: null,
+      targetBoard: null,
       contextMenu: null
     })
 }))

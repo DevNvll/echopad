@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
-import { Note, Notebook } from './types'
+import { Note, Notebook, BoardMetadata } from './types'
 import {
   getSetting,
   openNotebookInExplorer,
@@ -13,13 +13,15 @@ import { MainContent } from './components/MainContent'
 import {
   CreateNotebookModal,
   EditNotebookModal,
-  DeleteNotebookModal
+  DeleteNotebookModal,
+  CreateBoardModal,
+  EditBoardModal
 } from './components/modals'
 import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
 import { SettingsModal } from './components/SettingsModal'
 import { MediaSidesheet } from './components/MediaSidesheet'
-import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
+import { Trash2, Edit2, Copy, FolderOpen, FolderPlus, Kanban } from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
 import { SplashScreen } from './components/SplashScreen'
@@ -37,6 +39,7 @@ import {
   useRouterStore,
   useKeybindsStore
 } from './stores'
+import { useBoardStore } from './stores/boardStore'
 import { registerBuiltInCommands } from './commands'
 import { Toaster } from 'sonner'
 
@@ -78,6 +81,7 @@ function App() {
     openCreateModal,
     openEditModal,
     openDeleteModal,
+    openEditBoardModal,
     closeAllModals
   } = useUIStore()
 
@@ -86,8 +90,11 @@ function App() {
     navigateToSearch,
     navigateToDashboard,
     navigateToNotebook,
-    navigateToEmpty
+    navigateToEmpty,
+    navigateToBoard
   } = useRouterStore()
+
+  const { deleteBoard } = useBoardStore()
 
   const { checkForUpdates } = useUpdaterStore()
 
@@ -262,7 +269,7 @@ function App() {
   }, [vaultPath, activeNotebook, loadNotes, clearNotes])
 
   useEffect(() => {
-    if (currentRoute.type === 'search') return
+    if (currentRoute.type === 'search' || currentRoute.type === 'board') return
 
     if (activeNotebook) {
       navigateToNotebook(activeNotebook)
@@ -302,7 +309,7 @@ function App() {
     await deleteNote(vaultPath, activeNotebook, filename)
   }
 
-  const handleContextMenuAction = (action: ContextMenuAction) => {
+  const handleContextMenuAction = async (action: ContextMenuAction) => {
     if (!contextMenu) return
 
     if (contextMenu.type === 'notebook') {
@@ -317,6 +324,20 @@ function App() {
         openCreateModal(notebook)
       } else if (action === 'open-in-explorer') {
         openNotebookInExplorer(notebook.path)
+      }
+    } else if (contextMenu.type === 'board') {
+      const board = contextMenu.data as BoardMetadata
+      if (!board) return
+
+      if (action === 'open') {
+        navigateToBoard(board.filename)
+      } else if (action === 'edit') {
+        openEditBoardModal(board)
+      } else if (action === 'delete') {
+        if (vaultPath) {
+          await deleteBoard(vaultPath, board.filename)
+          navigateToDashboard()
+        }
       }
     } else if (contextMenu.type === 'message') {
       const note = contextMenu.data as Note
@@ -443,24 +464,43 @@ function App() {
                           destructive: true
                         }
                       ]
-                    : [
-                        {
-                          label: 'Edit Note',
-                          action: 'edit',
-                          icon: <Edit2 size={12} />
-                        },
-                        {
-                          label: 'Copy Text',
-                          action: 'copy',
-                          icon: <Copy size={12} />
-                        },
-                        {
-                          label: 'Delete Note',
-                          action: 'delete',
-                          icon: <Trash2 size={12} />,
-                          destructive: true
-                        }
-                      ]
+                    : contextMenu.type === 'board'
+                      ? [
+                          {
+                            label: 'Open Board',
+                            action: 'open',
+                            icon: <Kanban size={12} />
+                          },
+                          {
+                            label: 'Rename Board',
+                            action: 'edit',
+                            icon: <Edit2 size={12} />
+                          },
+                          {
+                            label: 'Delete Board',
+                            action: 'delete',
+                            icon: <Trash2 size={12} />,
+                            destructive: true
+                          }
+                        ]
+                      : [
+                          {
+                            label: 'Edit Note',
+                            action: 'edit',
+                            icon: <Edit2 size={12} />
+                          },
+                          {
+                            label: 'Copy Text',
+                            action: 'copy',
+                            icon: <Copy size={12} />
+                          },
+                          {
+                            label: 'Delete Note',
+                            action: 'delete',
+                            icon: <Trash2 size={12} />,
+                            destructive: true
+                          }
+                        ]
                 }
               />
             )}
@@ -468,6 +508,8 @@ function App() {
             <CreateNotebookModal />
             <EditNotebookModal />
             <DeleteNotebookModal />
+            <CreateBoardModal />
+            <EditBoardModal />
           </div>
         </div>
       </div>

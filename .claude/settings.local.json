@@ -4,7 +4,8 @@
       "Bash(cat:*)",
       "Bash(pnpm add:*)",
       "Bash(pnpm build:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(cargo check:*)"
     ],
     "deny": [],
     "ask": []

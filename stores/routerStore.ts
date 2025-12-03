@@ -3,6 +3,7 @@ import { create } from 'zustand'
 export type Route =
   | { type: 'dashboard' }
   | { type: 'notebook'; notebookPath: string }
+  | { type: 'board'; boardFilename: string }
   | { type: 'search'; query?: string }
   | { type: 'empty' }
 
@@ -11,6 +12,7 @@ interface RouterState {
 
   navigate: (route: Route) => void
   navigateToNotebook: (notebookPath: string) => void
+  navigateToBoard: (boardFilename: string) => void
   navigateToSearch: (query?: string) => void
   navigateToDashboard: () => void
   navigateToEmpty: () => void
@@ -25,6 +27,9 @@ export const useRouterStore = create<RouterState>((set, get) => ({
 
   navigateToNotebook: (notebookPath) =>
     set({ currentRoute: { type: 'notebook', notebookPath } }),
+
+  navigateToBoard: (boardFilename) =>
+    set({ currentRoute: { type: 'board', boardFilename } }),
 
   navigateToSearch: (query = '') =>
     set({ currentRoute: { type: 'search', query } }),

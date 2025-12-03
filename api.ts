@@ -2,7 +2,17 @@ import { invoke } from '@tauri-apps/api/core'
 import { appDataDir, join } from '@tauri-apps/api/path'
 import Database from '@tauri-apps/plugin-sql'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
-import { Note, NoteMetadata, Notebook, AppSettings, OgMetadata } from './types'
+import {
+  Note,
+  NoteMetadata,
+  Notebook,
+  AppSettings,
+  OgMetadata,
+  KanbanBoard,
+  KanbanColumn,
+  BoardMetadata
+} from './types'
+import { parseKanbanMarkdown, serializeKanbanMarkdown } from './utils/kanban'
 import { Reminder, ReminderFilter } from './types/reminders'
 import { extractTags, extractUrls } from './utils/formatting'
 
@@ -110,6 +120,24 @@ async function getDb(): Promise<Database> {
     await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at, completed, notified)`
     )
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS pinned_boards (
+        filename TEXT PRIMARY KEY,
+        sort_order INTEGER DEFAULT 0
+      )
+    `)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS board_order (
+        filename TEXT PRIMARY KEY,
+        sort_order INTEGER DEFAULT 0
+      )
+    `)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS collection_order (
+        id TEXT PRIMARY KEY,
+        sort_order INTEGER DEFAULT 0
+      )
+    `)
   }
   return db
 }
@@ -1146,4 +1174,168 @@ export async function getDueReminders(): Promise<Reminder[]> {
     completed: row.completed === 1,
     notified: row.notified === 1,
   }))
+}
+
+interface RawBoardFile {
+  filename: string
+  content: string
+  created_at: number
+}
+
+interface RawBoardMetadata {
+  filename: string
+  created_at: number
+  title: string | null
+}
+
+export async function listBoards(vaultPath: string): Promise<BoardMetadata[]> {
+  const result = await invoke<RawBoardMetadata[]>('list_boards', { vaultPath })
+  return result.map((r) => ({
+    filename: r.filename,
+    createdAt: r.created_at,
+    title: r.title || undefined
+  }))
+}
+
+export async function readBoard(
+  vaultPath: string,
+  filename: string
+): Promise<KanbanBoard> {
+  const raw = await invoke<RawBoardFile>('read_board', { vaultPath, filename })
+  const parsed = parseKanbanMarkdown(raw.content)
+
+  const database = await getDb()
+  const pinnedResult = await database.select<{ filename: string }[]>(
+    'SELECT filename FROM pinned_boards WHERE filename = ?',
+    [filename]
+  )
+
+  return {
+    filename: raw.filename,
+    title: parsed.frontMatter.title || raw.filename.replace('.md', ''),
+    createdAt: raw.created_at,
+    columns: parsed.columns,
+    isPinned: pinnedResult.length > 0
+  }
+}
+
+export async function createBoard(
+  vaultPath: string,
+  title: string
+): Promise<KanbanBoard> {
+  const raw = await invoke<RawBoardFile>('create_board', { vaultPath, title })
+  const parsed = parseKanbanMarkdown(raw.content)
+
+  return {
+    filename: raw.filename,
+    title: parsed.frontMatter.title || title,
+    createdAt: raw.created_at,
+    columns: parsed.columns,
+    isPinned: false
+  }
+}
+
+export async function updateBoard(
+  vaultPath: string,
+  filename: string,
+  title: string,
+  columns: KanbanColumn[]
+): Promise<KanbanBoard> {
+  const content = serializeKanbanMarkdown(title, columns)
+  const raw = await invoke<RawBoardFile>('update_board', {
+    vaultPath,
+    filename,
+    content
+  })
+
+  const parsed = parseKanbanMarkdown(raw.content)
+
+  return {
+    filename: raw.filename,
+    title: parsed.frontMatter.title || title,
+    createdAt: raw.created_at,
+    columns: parsed.columns,
+    isPinned: false
+  }
+}
+
+export async function deleteBoard(
+  vaultPath: string,
+  filename: string
+): Promise<void> {
+  await invoke('delete_board', { vaultPath, filename })
+
+  const database = await getDb()
+  await database.execute('DELETE FROM pinned_boards WHERE filename = ?', [
+    filename
+  ])
+}
+
+export async function toggleBoardPin(filename: string): Promise<boolean> {
+  const database = await getDb()
+  const result = await database.select<{ filename: string }[]>(
+    'SELECT filename FROM pinned_boards WHERE filename = ?',
+    [filename]
+  )
+
+  if (result.length > 0) {
+    await database.execute('DELETE FROM pinned_boards WHERE filename = ?', [
+      filename
+    ])
+    return false
+  } else {
+    const maxResult = await database.select<{ max_order: number | null }[]>(
+      'SELECT MAX(sort_order) as max_order FROM pinned_boards'
+    )
+    const nextOrder = (maxResult[0]?.max_order ?? -1) + 1
+    await database.execute(
+      'INSERT INTO pinned_boards (filename, sort_order) VALUES (?, ?)',
+      [filename, nextOrder]
+    )
+    return true
+  }
+}
+
+export async function getPinnedBoards(): Promise<string[]> {
+  const database = await getDb()
+  const result = await database.select<{ filename: string }[]>(
+    'SELECT filename FROM pinned_boards ORDER BY sort_order ASC'
+  )
+  return result.map((r) => r.filename)
+}
+
+export async function getBoardOrder(): Promise<string[]> {
+  const database = await getDb()
+  const result = await database.select<{ filename: string; sort_order: number }[]>(
+    'SELECT filename, sort_order FROM board_order ORDER BY sort_order ASC'
+  )
+  return result.map((r) => r.filename)
+}
+
+export async function updateBoardOrder(orderedFilenames: string[]): Promise<void> {
+  const database = await getDb()
+  for (let i = 0; i < orderedFilenames.length; i++) {
+    await database.execute(
+      'INSERT INTO board_order (filename, sort_order) VALUES (?, ?) ON CONFLICT(filename) DO UPDATE SET sort_order = ?',
+      [orderedFilenames[i], i, i]
+    )
+  }
+}
+
+export async function getCollectionOrder(): Promise<string[]> {
+  const database = await getDb()
+  const result = await database.select<{ id: string; sort_order: number }[]>(
+    'SELECT id, sort_order FROM collection_order ORDER BY sort_order ASC'
+  )
+  return result.map((r) => r.id)
+}
+
+export async function updateCollectionOrder(orderedIds: string[]): Promise<void> {
+  const database = await getDb()
+  for (let i = 0; i < orderedIds.length; i++) {
+    await database.execute(
+      'INSERT INTO collection_order (id, sort_order) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET sort_order = ?',
+      [orderedIds[i], i, i]
+    )
+  }
 }

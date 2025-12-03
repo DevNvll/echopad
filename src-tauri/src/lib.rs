@@ -40,6 +40,37 @@ pub struct OgMetadata {
     pub favicon: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BoardFile {
+    pub filename: String,
+    pub content: String,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BoardMetadata {
+    pub filename: String,
+    pub created_at: u64,
+    pub title: Option<String>,
+}
+
+fn extract_board_title(content: &str) -> Option<String> {
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.len() < 2 || lines[0].trim() != "---" {
+        return None;
+    }
+
+    for line in lines.iter().skip(1) {
+        if line.trim() == "---" {
+            break;
+        }
+        if line.starts_with("title:") {
+            return Some(line[6..].trim().to_string());
+        }
+    }
+    None
+}
+
 fn scan_notebooks_recursive(dir_path: &PathBuf, vault_path: &PathBuf) -> Result<Vec<Notebook>, String> {
     let mut notebooks = Vec::new();
     let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
@@ -382,6 +413,135 @@ fn fetch_og_metadata(url: String) -> Result<OgMetadata, String> {
     })
 }
 
+#[tauri::command]
+fn list_boards(vault_path: String) -> Result<Vec<BoardMetadata>, String> {
+    let boards_path = PathBuf::from(&vault_path).join(".boards");
+
+    if !boards_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut boards = Vec::new();
+    let entries = fs::read_dir(&boards_path).map_err(|e| e.to_string())?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_path = entry.path();
+
+        if entry_path.is_file() {
+            if let Some(ext) = entry_path.extension() {
+                if ext == "md" {
+                    if let Some(filename) = entry_path.file_name() {
+                        let filename_str = filename.to_string_lossy().to_string();
+                        let stem = entry_path.file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        let created_at = stem.parse::<u64>().unwrap_or(0);
+
+                        let title = fs::read_to_string(&entry_path)
+                            .ok()
+                            .and_then(|content| extract_board_title(&content));
+
+                        boards.push(BoardMetadata {
+                            filename: filename_str,
+                            created_at,
+                            title,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    boards.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(boards)
+}
+
+#[tauri::command]
+fn read_board(vault_path: String, filename: String) -> Result<BoardFile, String> {
+    let path = PathBuf::from(&vault_path).join(".boards").join(&filename);
+
+    if !path.exists() {
+        return Err("Board does not exist".to_string());
+    }
+
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let stem = path.file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let created_at = stem.parse::<u64>().unwrap_or(0);
+
+    Ok(BoardFile {
+        filename,
+        content,
+        created_at,
+    })
+}
+
+#[tauri::command]
+fn create_board(vault_path: String, title: String) -> Result<BoardFile, String> {
+    let boards_path = PathBuf::from(&vault_path).join(".boards");
+
+    if !boards_path.exists() {
+        fs::create_dir_all(&boards_path).map_err(|e| e.to_string())?;
+    }
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis() as u64;
+
+    let filename = format!("{}.md", timestamp);
+    let path = boards_path.join(&filename);
+
+    let content = format!(
+        "---\ntype: kanban\ntitle: {}\n---\n\n## Todo\n\n## In Progress\n\n## Done\n",
+        title
+    );
+
+    fs::write(&path, &content).map_err(|e| e.to_string())?;
+
+    Ok(BoardFile {
+        filename,
+        content,
+        created_at: timestamp,
+    })
+}
+
+#[tauri::command]
+fn update_board(vault_path: String, filename: String, content: String) -> Result<BoardFile, String> {
+    let path = PathBuf::from(&vault_path).join(".boards").join(&filename);
+
+    if !path.exists() {
+        return Err("Board does not exist".to_string());
+    }
+
+    fs::write(&path, &content).map_err(|e| e.to_string())?;
+
+    let stem = path.file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let created_at = stem.parse::<u64>().unwrap_or(0);
+
+    Ok(BoardFile {
+        filename,
+        content,
+        created_at,
+    })
+}
+
+#[tauri::command]
+fn delete_board(vault_path: String, filename: String) -> Result<(), String> {
+    let path = PathBuf::from(&vault_path).join(".boards").join(&filename);
+
+    if !path.exists() {
+        return Err("Board does not exist".to_string());
+    }
+
+    fs::remove_file(&path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn show_quick_capture(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("quick-capture") {
         window.show().map_err(|e| e.to_string())?;
@@ -537,6 +697,11 @@ pub fn run() {
             hide_quick_capture,
             fetch_og_metadata,
             open_devtools,
+            list_boards,
+            read_board,
+            create_board,
+            update_board,
+            delete_board,
             // Sync commands
             sync::commands::sync_login,
             sync::commands::sync_register,

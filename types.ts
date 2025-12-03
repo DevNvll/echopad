@@ -46,3 +46,29 @@ export interface OgMetadata {
   favicon: string | null;
   cachedAt?: number;
 }
+
+export interface KanbanCard {
+  id: string;
+  content: string;
+  tags: string[];
+}
+
+export interface KanbanColumn {
+  id: string;
+  title: string;
+  cards: KanbanCard[];
+}
+
+export interface KanbanBoard {
+  filename: string;
+  title: string;
+  createdAt: number;
+  columns: KanbanColumn[];
+  isPinned?: boolean;
+}
+
+export interface BoardMetadata {
+  filename: string;
+  createdAt: number;
+  title?: string;
+}
