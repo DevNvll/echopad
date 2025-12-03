@@ -136,6 +136,66 @@ const SortablePinnedItem: React.FC<SortablePinnedItemProps> = ({
   )
 }
 
+// Pinned board item
+interface PinnedBoardItemProps {
+  board: { filename: string; title?: string; createdAt: number }
+  isActive: boolean
+  onSelect: () => void
+  onContextMenu: (e: React.MouseEvent) => void
+  onTogglePin: () => void
+}
+
+const PinnedBoardItem: React.FC<PinnedBoardItemProps> = ({
+  board,
+  isActive,
+  onSelect,
+  onContextMenu,
+  onTogglePin
+}) => {
+  return (
+    <div className="relative group/item">
+      <button
+        onClick={onSelect}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          onContextMenu(e)
+        }}
+        className={clsx(
+          'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mx-0 transition-all text-[14px] group relative font-medium',
+          isActive
+            ? 'bg-surfaceHighlight text-textMain shadow-sm'
+            : 'text-textMuted hover:bg-surfaceHighlight/40 hover:text-textMain/90'
+        )}
+      >
+        <Kanban
+          size={16}
+          className={clsx(
+            'shrink-0',
+            isActive
+              ? 'text-brand'
+              : 'text-textMuted/60 group-hover:text-textMuted'
+          )}
+        />
+        <span className="truncate leading-none pb-px flex-1 text-left">
+          {board.title || board.filename.replace('.md', '')}
+        </span>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation()
+            onTogglePin()
+          }}
+          className="opacity-100 text-brand hover:text-brand transition-opacity p-1 hover:bg-surfaceHighlight rounded"
+          title="Unpin Board"
+        >
+          <PinOff size={12} />
+        </div>
+      </button>
+    </div>
+  )
+}
+
 interface NotebookTreeItemProps {
   notebook: Notebook
   activeNotebook: string | null
@@ -295,8 +355,14 @@ interface SortableCollectionItemProps {
   onContextMenu?: (e: React.MouseEvent) => void
   onCreateSubnotebook?: () => void
   onTogglePin?: () => void
+  isPinned?: boolean
   expandedPaths?: Set<string>
   onToggleExpand?: (path: string) => void
+  onChildContextMenu?: (e: React.MouseEvent, notebook: Notebook) => void
+  onChildSelectNotebook?: (relativePath: string) => void
+  onChildCreateSubnotebook?: (parent: Notebook) => void
+  onChildTogglePin?: (notebook: Notebook) => void
+  activeNotebook?: string | null
 }
 
 const SortableCollectionItem: React.FC<SortableCollectionItemProps> = ({
@@ -306,8 +372,14 @@ const SortableCollectionItem: React.FC<SortableCollectionItemProps> = ({
   onContextMenu,
   onCreateSubnotebook,
   onTogglePin,
+  isPinned,
   expandedPaths,
-  onToggleExpand
+  onToggleExpand,
+  onChildContextMenu,
+  onChildSelectNotebook,
+  onChildCreateSubnotebook,
+  onChildTogglePin,
+  activeNotebook
 }) => {
   const {
     attributes,
@@ -329,15 +401,15 @@ const SortableCollectionItem: React.FC<SortableCollectionItemProps> = ({
       <div
         ref={setNodeRef}
         style={style}
+        {...attributes}
+        {...listeners}
         className="relative group/item"
       >
-        <div
-          {...attributes}
-          {...listeners}
+        <button
           onClick={onSelect}
           onContextMenu={onContextMenu}
           className={clsx(
-            'w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-[14px] group relative font-medium cursor-grab active:cursor-grabbing',
+            'w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-[14px] group relative font-medium',
             isActive
               ? 'bg-surfaceHighlight text-textMain shadow-sm'
               : 'text-textMuted hover:bg-surfaceHighlight/40 hover:text-textMain/90'
@@ -357,7 +429,24 @@ const SortableCollectionItem: React.FC<SortableCollectionItemProps> = ({
           <span className="truncate leading-none flex-1 text-left">
             {item.board.title || item.board.filename.replace('.md', '')}
           </span>
-        </div>
+          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation()
+                onTogglePin?.()
+              }}
+              className={clsx(
+                'p-1 hover:bg-surfaceHighlight rounded text-textMuted hover:text-textMain',
+                isPinned && 'opacity-100! text-brand hover:text-brand'
+              )}
+              title={isPinned ? 'Unpin Board' : 'Pin Board'}
+            >
+              {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+            </div>
+          </div>
+        </button>
       </div>
     )
   }
@@ -464,11 +553,11 @@ const SortableCollectionItem: React.FC<SortableCollectionItemProps> = ({
             <NotebookTreeItem
               key={child.relativePath}
               notebook={child}
-              activeNotebook={isActive ? notebook.relativePath : null}
-              onSelectNotebook={() => {}}
-              onCreateSubnotebook={() => {}}
-              onContextMenu={() => {}}
-              onTogglePin={() => {}}
+              activeNotebook={activeNotebook || null}
+              onSelectNotebook={onChildSelectNotebook || (() => {})}
+              onCreateSubnotebook={onChildCreateSubnotebook || (() => {})}
+              onContextMenu={onChildContextMenu || (() => {})}
+              onTogglePin={onChildTogglePin || (() => {})}
               expandedPaths={expandedPaths || new Set()}
               onToggleExpand={onToggleExpand || (() => {})}
               depth={1}
@@ -496,7 +585,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
   const { openCreateModal, openContextMenu, openSettings, openCreateBoardModal } = useUIStore()
   const { vaultStatuses } = useSyncStore()
   const { currentRoute, navigateToDashboard, navigateToBoard, navigateToNotebook } = useRouterStore()
-  const { boards, loadBoards, selectBoard: selectBoardStore, collectionOrder, reorderCollection } = useBoardStore()
+  const { boards, loadBoards, selectBoard: selectBoardStore, collectionOrder, reorderCollection, pinnedBoards, togglePin: toggleBoardPin } = useBoardStore()
 
   const isDashboardActive = currentRoute.type === 'dashboard'
   const effectiveActiveNotebook = currentRoute.type === 'notebook' ? activeNotebook : null
@@ -550,6 +639,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
       return a.name.localeCompare(b.name)
     })
   }, [notebooks, pinnedOrder])
+
+  // Compute sorted pinned boards
+  const pinnedBoardsList = useMemo(() => {
+    return boards.filter((b) => pinnedBoards.includes(b.filename))
+  }, [boards, pinnedBoards])
+
+  const hasPinnedItems = pinnedNotebooks.length > 0 || pinnedBoardsList.length > 0
 
   // Create unified collection items (notebooks + boards)
   type CollectionItem =
@@ -845,38 +941,52 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
           </span>
         </button>
 
-        {pinnedNotebooks.length > 0 && (
+        {hasPinnedItems && (
           <div className="mb-3">
             <div className="px-2 pb-2 flex items-center justify-between group mb-1">
               <h3 className="text-[10px] font-bold text-textMuted/60 uppercase tracking-widest group-hover:text-textMuted transition-colors">
                 Pinned
               </h3>
             </div>
-            <DndContext
-              id="pinned-dnd"
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handlePinnedDragEnd}
-              modifiers={[restrictToVerticalAxis]}
-            >
-              <SortableContext
-                items={pinnedNotebooks.map((nb) => nb.relativePath)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="flex flex-col gap-0.5">
-                  {pinnedNotebooks.map((notebook) => (
-                    <SortablePinnedItem
-                      key={notebook.relativePath}
-                      notebook={notebook}
-                      activeNotebook={effectiveActiveNotebook}
-                      onSelectNotebook={handleSelectNotebook}
-                      onContextMenu={handleContextMenu}
-                      onTogglePin={togglePin}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <div className="flex flex-col gap-0.5">
+              {pinnedNotebooks.length > 0 && (
+                <DndContext
+                  id="pinned-dnd"
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handlePinnedDragEnd}
+                  modifiers={[restrictToVerticalAxis]}
+                >
+                  <SortableContext
+                    items={pinnedNotebooks.map((nb) => nb.relativePath)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      {pinnedNotebooks.map((notebook) => (
+                        <SortablePinnedItem
+                          key={notebook.relativePath}
+                          notebook={notebook}
+                          activeNotebook={effectiveActiveNotebook}
+                          onSelectNotebook={handleSelectNotebook}
+                          onContextMenu={handleContextMenu}
+                          onTogglePin={togglePin}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+              {pinnedBoardsList.map((board) => (
+                <PinnedBoardItem
+                  key={board.filename}
+                  board={board}
+                  isActive={activeBoardFilename === board.filename}
+                  onSelect={() => handleSelectBoard(board.filename)}
+                  onContextMenu={(e) => handleBoardContextMenu(e, board)}
+                  onTogglePin={() => toggleBoardPin(board.filename)}
+                />
+              ))}
+            </div>
             <div className="my-3 border-b border-border/30 mx-2" />
           </div>
         )}
@@ -952,10 +1062,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                     onTogglePin={
                       item.type === 'notebook'
                         ? () => togglePin(item.notebook)
-                        : undefined
+                        : () => toggleBoardPin(item.board.filename)
+                    }
+                    isPinned={
+                      item.type === 'notebook'
+                        ? item.notebook.isPinned
+                        : pinnedBoards.includes(item.board.filename)
                     }
                     expandedPaths={expandedPaths}
                     onToggleExpand={handleToggleExpand}
+                    onChildContextMenu={handleContextMenu}
+                    onChildSelectNotebook={handleSelectNotebook}
+                    onChildCreateSubnotebook={(parent) => openCreateModal(parent)}
+                    onChildTogglePin={togglePin}
+                    activeNotebook={effectiveActiveNotebook}
                   />
                 ))}
               </div>
