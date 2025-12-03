@@ -2,7 +2,6 @@ import React, { useMemo, memo } from 'react'
 import { clsx } from 'clsx'
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs'
-// Only import languages you need for better performance
 import javascript from 'react-syntax-highlighter/dist/esm/languages/hljs/javascript'
 import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript'
 import python from 'react-syntax-highlighter/dist/esm/languages/hljs/python'
@@ -12,6 +11,7 @@ import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json'
 import bash from 'react-syntax-highlighter/dist/esm/languages/hljs/bash'
 import sql from 'react-syntax-highlighter/dist/esm/languages/hljs/sql'
 import xml from 'react-syntax-highlighter/dist/esm/languages/hljs/xml'
+import { Check } from 'lucide-react'
 import { NoteImage } from '../NoteImage'
 
 // Register languages
@@ -32,7 +32,6 @@ SyntaxHighlighter.registerLanguage('sql', sql)
 SyntaxHighlighter.registerLanguage('xml', xml)
 SyntaxHighlighter.registerLanguage('html', xml)
 
-// Memoized code block component
 const CodeBlock = memo(({ language, children }: { language: string; children: string }) => (
   <SyntaxHighlighter
     style={atomOneDark}
@@ -55,7 +54,12 @@ const CodeBlock = memo(({ language, children }: { language: string; children: st
   </SyntaxHighlighter>
 ))
 
-export function useMarkdownComponents(vaultPath: string | null) {
+export interface MarkdownComponentsOptions {
+  vaultPath: string | null
+  onToggleTodoRef?: React.MutableRefObject<((todoIndex: number) => void) | undefined>
+}
+
+export function useMarkdownComponents({ vaultPath, onToggleTodoRef }: MarkdownComponentsOptions) {
   return useMemo(
     () => ({
       h1: ({ node, ...props }: any) => (
@@ -138,6 +142,43 @@ export function useMarkdownComponents(vaultPath: string | null) {
           className="list-decimal list-outside ml-5 mb-2 space-y-1 text-textMuted marker:text-brand/50"
         />
       ),
+      li: ({ node, children, className, ...props }: any) => {
+        const isTaskItem = className?.includes('task-list-item')
+        if (isTaskItem) {
+          return <li {...props} className="list-none">{children}</li>
+        }
+        return <li {...props}>{children}</li>
+      },
+      input: ({ node, type, checked, disabled, ...props }: any) => {
+        if (type === 'checkbox') {
+          const isChecked = checked === true
+          return (
+            <button
+              type="button"
+              data-todo-checkbox="true"
+              onClick={(e) => {
+                e.stopPropagation()
+                const container = e.currentTarget.closest('.markdown-content')
+                if (!container) return
+                const allCheckboxes = container.querySelectorAll('[data-todo-checkbox]')
+                const index = Array.from(allCheckboxes).indexOf(e.currentTarget)
+                onToggleTodoRef?.current?.(index)
+              }}
+              className={clsx(
+                'mr-2 w-4 h-4 rounded border inline-flex items-center justify-center shrink-0 transition-all align-middle',
+                isChecked
+                  ? 'bg-brand border-brand text-white'
+                  : 'border-border/60 hover:border-brand/60 bg-transparent'
+              )}
+              aria-checked={isChecked}
+              role="checkbox"
+            >
+              {isChecked && <Check className="w-3 h-3" strokeWidth={3} />}
+            </button>
+          )
+        }
+        return <input type={type} checked={checked} {...props} />
+      },
       a: ({ node, ...props }: any) => (
         <a
           {...props}
@@ -170,7 +211,7 @@ export function useMarkdownComponents(vaultPath: string | null) {
         )
       }
     }),
-    [vaultPath]
+    [vaultPath, onToggleTodoRef]
   )
 }
 

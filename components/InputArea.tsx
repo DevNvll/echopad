@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { ArrowUp, ImagePlus, Maximize2, Minimize2, Eye, EyeOff } from 'lucide-react'
 import { saveImage } from '../api'
 import {
@@ -37,8 +38,7 @@ export const InputArea: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputContainerRef = useRef<HTMLDivElement>(null)
 
-  // Reuse existing markdown rendering components
-  const markdownComponents = useMarkdownComponents(vaultPath)
+  const markdownComponents = useMarkdownComponents({ vaultPath })
 
   useEffect(() => {
     const trimmed = content.trim()
@@ -365,7 +365,7 @@ export const InputArea: React.FC = () => {
               onClick={() => setIsPreviewMode(false)}
             >
               {content.trim() ? (
-                <ReactMarkdown components={markdownComponents}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {content}
                 </ReactMarkdown>
               ) : (

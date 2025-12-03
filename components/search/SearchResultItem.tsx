@@ -1,6 +1,7 @@
 import { useMemo, Fragment } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { FolderOpen, Clock, Link2, Star, Image as ImageIcon } from 'lucide-react'
+import remarkGfm from 'remark-gfm'
+import { FolderOpen, Clock, Link2, Star, Image as ImageIcon, Check } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Note } from '../../types'
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns'
@@ -161,15 +162,37 @@ export function SearchResultItem({
       ),
       ul: ({ children }: any) => <span>{children}</span>,
       ol: ({ children }: any) => <span>{children}</span>,
-      li: ({ children }: any) => (
-        <span>
-          • {typeof children === 'string' ? (
-            <HighlightText text={children} query={query} />
-          ) : (
-            children
-          )}{' '}
-        </span>
-      ),
+      li: ({ children, className }: any) => {
+        const isTaskItem = className?.includes('task-list-item')
+        return (
+          <span className={isTaskItem ? '' : undefined}>
+            {!isTaskItem && '• '}
+            {typeof children === 'string' ? (
+              <HighlightText text={children} query={query} />
+            ) : (
+              children
+            )}{' '}
+          </span>
+        )
+      },
+      input: ({ type, checked }: any) => {
+        if (type === 'checkbox') {
+          const isChecked = checked === true
+          return (
+            <span
+              className={clsx(
+                'inline-flex items-center justify-center w-3 h-3 rounded border mr-1 align-middle',
+                isChecked
+                  ? 'bg-brand border-brand text-white'
+                  : 'border-border/60 bg-transparent'
+              )}
+            >
+              {isChecked && <Check className="w-2 h-2" strokeWidth={3} />}
+            </span>
+          )
+        }
+        return null
+      },
       blockquote: ({ children }: any) => (
         <span className="text-textMuted/70 italic border-l-2 border-brand/30 pl-2">
           {children}
@@ -237,7 +260,7 @@ export function SearchResultItem({
       </div>
 
       <div className="text-[12px] text-textMain/80 leading-relaxed line-clamp-3 markdown-preview">
-        <ReactMarkdown components={markdownComponents}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
           {previewContent}
         </ReactMarkdown>
       </div>

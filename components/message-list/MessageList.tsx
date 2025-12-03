@@ -14,7 +14,7 @@ import { MessageItem } from './MessageItem'
 import { EmptyState } from './EmptyState'
 import { LoadingState, LoadingMoreIndicator } from './LoadingState'
 import { ScrollToBottomButton } from './ScrollToBottomButton'
-import { useMarkdownComponents } from './useMarkdownComponents'
+import { toggleTodo } from '../../utils/markdown'
 
 // Flattened item types for virtualization
 type VirtualListItem =
@@ -57,7 +57,6 @@ export const MessageList: React.FC = React.memo(function MessageList() {
   const isLoadingMoreRef = useRef(false)
   const isRestoringScrollRef = useRef(false)
 
-  const markdownComponents = useMarkdownComponents(vaultPath)
 
   const flattenedItems = useMemo<VirtualListItem[]>(() => {
     const items: VirtualListItem[] = []
@@ -247,6 +246,23 @@ export const MessageList: React.FC = React.memo(function MessageList() {
     [toggleFavorite]
   )
 
+  const handleToggleTodo = useCallback(
+    async (note: Note, todoIndex: number) => {
+      if (!vaultPath || !activeNotebook) return
+      const newContent = toggleTodo(note.content, todoIndex)
+      if (newContent !== note.content) {
+        const updated = await updateNote(
+          vaultPath,
+          activeNotebook,
+          note.filename,
+          newContent
+        )
+        await syncNoteTags(updated)
+      }
+    },
+    [vaultPath, activeNotebook, updateNote, syncNoteTags]
+  )
+
   const lastNoteRef = useRef<string | null>(null)
   const hasInitialScrolled = useRef(false)
 
@@ -398,7 +414,7 @@ export const MessageList: React.FC = React.memo(function MessageList() {
                     isEditing={isEditing}
                     copiedMessageId={copiedMessageId}
                     deleteConfirmId={deleteConfirmId}
-                    markdownComponents={markdownComponents}
+                    vaultPath={vaultPath}
                     onContextMenu={(e) => handleContextMenu(e, note)}
                     onEdit={() => setEditing(note.filename)}
                     onEditSubmit={(content) =>
@@ -415,6 +431,9 @@ export const MessageList: React.FC = React.memo(function MessageList() {
                     onTagClick={handleTagClick}
                     onToggleFavorite={() =>
                       handleToggleFavorite(note.filename, note.notebookName)
+                    }
+                    onToggleTodo={(todoIndex) =>
+                      handleToggleTodo(note, todoIndex)
                     }
                   />
                 </div>

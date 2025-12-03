@@ -1,11 +1,15 @@
-import React, { forwardRef, useMemo } from 'react'
+import React, { forwardRef, useMemo, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { clsx } from 'clsx'
 import { Note } from '../../types'
 import { LinkPreview } from '../LinkPreview'
 import { EditTextarea } from './EditTextarea'
 import { MessageActions } from './MessageActions'
 import { linkifyUrls } from '../../utils/formatting'
+import { useMarkdownComponents } from './useMarkdownComponents'
+
+const remarkPlugins = [remarkGfm]
 
 interface MessageItemProps {
   note: Note
@@ -13,7 +17,7 @@ interface MessageItemProps {
   isEditing: boolean
   copiedMessageId: string | null
   deleteConfirmId: string | null
-  markdownComponents: Record<string, React.ComponentType<any>>
+  vaultPath: string | null
   onContextMenu: (e: React.MouseEvent) => void
   onEdit: () => void
   onEditSubmit: (content: string) => void
@@ -24,6 +28,7 @@ interface MessageItemProps {
   onDeleteConfirm: () => void
   onTagClick: (tag: string) => void
   onToggleFavorite: () => void
+  onToggleTodo: (todoIndex: number) => void
 }
 
 export const MessageItem = React.memo(
@@ -35,7 +40,7 @@ export const MessageItem = React.memo(
         isEditing,
         copiedMessageId,
         deleteConfirmId,
-        markdownComponents,
+        vaultPath,
         onContextMenu,
         onEdit,
         onEditSubmit,
@@ -45,7 +50,8 @@ export const MessageItem = React.memo(
         onDeleteCancel,
         onDeleteConfirm,
         onTagClick,
-        onToggleFavorite
+        onToggleFavorite,
+        onToggleTodo
       },
       ref
     ) => {
@@ -55,7 +61,14 @@ export const MessageItem = React.memo(
         hour12: false
       })
 
-      // Convert bare URLs to clickable markdown links
+      const onToggleTodoRef = useRef(onToggleTodo)
+      onToggleTodoRef.current = onToggleTodo
+
+      const markdownComponents = useMarkdownComponents({
+        vaultPath,
+        onToggleTodoRef
+      })
+
       const linkedContent = useMemo(() => linkifyUrls(note.content), [note.content])
 
       return (
@@ -102,7 +115,10 @@ export const MessageItem = React.memo(
               ) : (
                 <>
                   <div className="text-textMain/90 text-[14px] leading-relaxed markdown-content">
-                    <ReactMarkdown components={markdownComponents}>
+                    <ReactMarkdown
+                      remarkPlugins={remarkPlugins}
+                      components={markdownComponents}
+                    >
                       {linkedContent}
                     </ReactMarkdown>
                   </div>

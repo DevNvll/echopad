@@ -4,21 +4,20 @@ import { ChatCommand } from '../types/chatCommands'
 export const todoCommand: ChatCommand = {
   name: 'todo',
   aliases: ['task', 'checkbox'],
-  description: 'Insert todo checkbox items',
-  usage: '/todo [item1] [item2] ...',
+  description: 'Insert todo checkbox item',
+  usage: '/todo <text>',
   category: 'note',
   icon: CheckSquare,
   arguments: [
     {
-      name: 'items',
-      description: 'Todo items to create',
+      name: 'text',
+      description: 'Todo item text',
       required: false,
     },
   ],
 
   execute: async (args) => {
     if (args.length === 0) {
-      // Just insert an empty checkbox
       return {
         success: true,
         insertContent: '- [ ] ',
@@ -26,12 +25,11 @@ export const todoCommand: ChatCommand = {
       }
     }
 
-    // Create multiple todo items
-    const todos = args.map(item => `- [ ] ${item}`).join('\n')
+    const text = args.join(' ')
 
     return {
       success: true,
-      insertContent: todos + '\n',
+      insertContent: `- [ ] ${text}\n`,
       clearInput: false,
     }
   },
