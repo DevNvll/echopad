@@ -19,7 +19,8 @@ import {
   useNotesStore,
   useTagsStore,
   useUIStore,
-  useSearchStore
+  useSearchStore,
+  useRouterStore
 } from '../../stores'
 
 export const CommandPalette: React.FC = () => {
@@ -32,9 +33,9 @@ export const CommandPalette: React.FC = () => {
     commandInitialSearch,
     closeCommand,
     openCreateModal,
-    openSettings,
-    openSearch
+    openSettings
   } = useUIStore()
+  const { navigateToSearch } = useRouterStore()
 
   const { search, setSearch, results, filteredTags } = useCommandSearch({
     isOpen: isCommandOpen,
@@ -83,7 +84,7 @@ export const CommandPalette: React.FC = () => {
   }
 
   const handleOpenSearch = (query?: string) => {
-    openSearch(query)
+    navigateToSearch(query)
     handleClose()
   }
 

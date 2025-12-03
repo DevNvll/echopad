@@ -9,10 +9,7 @@ import {
   saveVaultAccentColor
 } from './api'
 import { Sidebar } from './components/Sidebar'
-import { InputArea } from './components/InputArea'
-import { MessageList } from './components/MessageList'
-import { NoNotebookSelected } from './components/NoNotebookSelected'
-import { Dashboard } from './components/Dashboard'
+import { MainContent } from './components/MainContent'
 import {
   CreateNotebookModal,
   EditNotebookModal,
@@ -22,14 +19,12 @@ import { ContextMenu, ContextMenuAction } from './components/ContextMenu'
 import { CommandPalette } from './components/command-palette'
 import { SettingsModal } from './components/SettingsModal'
 import { MediaSidesheet } from './components/MediaSidesheet'
-import { SearchPage } from './components/search'
 import { Trash2, Edit2, Copy, FolderOpen, FolderPlus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { TitleBar } from './components/TitleBar'
 import { SplashScreen } from './components/SplashScreen'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { VaultSetup } from './components/VaultSetup'
-import { NotebookHeader } from './components/NotebookHeader'
 import { useSidebarResize, useKeyboardShortcuts } from './hooks'
 import {
   useVaultStore,
@@ -38,7 +33,9 @@ import {
   useTagsStore,
   useUIStore,
   useUpdaterStore,
-  useSyncStore
+  useSyncStore,
+  useRouterStore,
+  useKeybindsStore
 } from './stores'
 
 function App() {
@@ -57,18 +54,15 @@ function App() {
     isLoaded: isNotebooksLoaded,
     loadNotebooks,
     selectNotebook,
-    currentNotebook,
     restoreLastActiveNotebook
   } = useNotebookStore()
 
-  const { notes, loadNotes, clearNotes, setEditing, deleteNote } =
-    useNotesStore()
+  const { loadNotes, clearNotes, setEditing, deleteNote } = useNotesStore()
 
   const { isLoaded: isTagsLoaded, loadTags, removeNoteTags } = useTagsStore()
 
   const {
     isCommandOpen,
-    isSearchOpen,
     isSettingsOpen,
     isCreateModalOpen,
     isEditModalOpen,
@@ -78,14 +72,20 @@ function App() {
     toggleCommand,
     toggleSettings,
     openSettings,
-    openSearch,
-    closeSearch,
     closeContextMenu,
     openCreateModal,
     openEditModal,
     openDeleteModal,
     closeAllModals
   } = useUIStore()
+
+  const {
+    currentRoute,
+    navigateToSearch,
+    navigateToDashboard,
+    navigateToNotebook,
+    navigateToEmpty
+  } = useRouterStore()
 
   const { checkForUpdates } = useUpdaterStore()
 
@@ -121,6 +121,8 @@ function App() {
     }, 100)
   }, [restoreLastActiveNotebook])
 
+  const isSearchOpen = currentRoute.type === 'search'
+
   useKeyboardShortcuts({
     isCommandOpen,
     isSettingsOpen,
@@ -130,8 +132,8 @@ function App() {
     onToggleCommand: toggleCommand,
     onToggleSettings: toggleSettings,
     onOpenSettings: useCallback(() => openSettings('general'), [openSettings]),
-    onOpenSearch: useCallback(() => openSearch(), [openSearch]),
-    onCloseSearch: closeSearch,
+    onOpenSearch: useCallback(() => navigateToSearch(), [navigateToSearch]),
+    onCloseSearch: useCallback(() => navigateToDashboard(), [navigateToDashboard]),
     onToggleSidebar: toggleSidebar,
     onFocusInput: focusInput,
     onRestoreAndFocusInput: restoreAndFocusInput,
@@ -139,9 +141,12 @@ function App() {
     onCloseModals: closeAllModals
   })
 
+  const { loadKeybinds } = useKeybindsStore()
+
   useEffect(() => {
     initialize()
-  }, [initialize])
+    loadKeybinds()
+  }, [initialize, loadKeybinds])
 
   // Check for updates on startup (with delay to not block initial render)
   useEffect(() => {
@@ -253,6 +258,18 @@ function App() {
     loadNotes(vaultPath, activeNotebook)
   }, [vaultPath, activeNotebook, loadNotes, clearNotes])
 
+  useEffect(() => {
+    if (currentRoute.type === 'search') return
+
+    if (activeNotebook) {
+      navigateToNotebook(activeNotebook)
+    } else if (notebooks.length > 0) {
+      navigateToDashboard()
+    } else {
+      navigateToEmpty()
+    }
+  }, [activeNotebook, notebooks.length, currentRoute.type, navigateToNotebook, navigateToDashboard, navigateToEmpty])
+
   const handleSelectVault = async (): Promise<string | null> => {
     const selected = await open({
       directory: true,
@@ -311,8 +328,6 @@ function App() {
     closeContextMenu()
   }
 
-  const notebook = currentNotebook()
-
   const isFullyLoaded =
     isInitialized &&
     appSettings &&
@@ -363,44 +378,12 @@ function App() {
             )}
 
             <div className="flex-1 flex flex-col min-w-0 bg-background relative shadow-2xl">
-              {isSearchOpen ? (
-                <SearchPage
-                  isSidebarCollapsed={isSidebarCollapsed}
-                  onToggleSidebar={toggleSidebar}
-                />
-              ) : activeNotebook ? (
-                <>
-                  <NotebookHeader
-                    notebookPath={activeNotebook || undefined}
-                    noteCount={notes.length}
-                    isSidebarCollapsed={isSidebarCollapsed}
-                    onToggleSidebar={toggleSidebar}
-                    onOpenInExplorer={
-                      notebook
-                        ? () => openNotebookInExplorer(notebook.path)
-                        : undefined
-                    }
-                  />
-
-                  <div className="flex-1 flex flex-row min-h-0 pt-16 relative bg-[#050505]">
-                    <div className="flex-1 flex flex-col min-w-0 z-0">
-                      <MessageList />
-                      <InputArea />
-                    </div>
-                  </div>
-                </>
-              ) : notebooks.length > 0 ? (
-                <Dashboard
-                  isSidebarCollapsed={isSidebarCollapsed}
-                  onToggleSidebar={toggleSidebar}
-                  onCreateNotebook={() => openCreateModal()}
-                  onOpenCommandPalette={() => openCommand()}
-                />
-              ) : (
-                <NoNotebookSelected
-                  onCreateNotebook={() => openCreateModal()}
-                />
-              )}
+              <MainContent
+                isSidebarCollapsed={isSidebarCollapsed}
+                onToggleSidebar={toggleSidebar}
+                onCreateNotebook={() => openCreateModal()}
+                onOpenCommandPalette={() => openCommand()}
+              />
             </div>
 
             <CommandPalette />

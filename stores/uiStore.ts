@@ -13,9 +13,6 @@ interface UIState {
   isCommandOpen: boolean
   commandInitialSearch: string
 
-  isSearchOpen: boolean
-  searchQuery: string
-
   isSettingsOpen: boolean
   settingsSection: SettingsSection
 
@@ -32,10 +29,6 @@ interface UIState {
   openCommand: (initialSearch?: string) => void
   closeCommand: () => void
   toggleCommand: () => void
-
-  openSearch: (query?: string) => void
-  closeSearch: () => void
-  setSearchQuery: (query: string) => void
 
   openSettings: (section?: SettingsSection) => void
   closeSettings: () => void
@@ -58,12 +51,9 @@ interface UIState {
   closeAllModals: () => void
 }
 
-export const useUIStore = create<UIState>((set, get) => ({
+export const useUIStore = create<UIState>((set) => ({
   isCommandOpen: false,
   commandInitialSearch: '',
-
-  isSearchOpen: false,
-  searchQuery: '',
 
   isSettingsOpen: false,
   settingsSection: 'general',
@@ -88,11 +78,6 @@ export const useUIStore = create<UIState>((set, get) => ({
         ? ''
         : state.commandInitialSearch
     })),
-
-  openSearch: (query = '') =>
-    set({ isSearchOpen: true, searchQuery: query, isCommandOpen: false }),
-  closeSearch: () => set({ isSearchOpen: false, searchQuery: '' }),
-  setSearchQuery: (query) => set({ searchQuery: query }),
 
   openSettings: (section = 'general') =>
     set({ isSettingsOpen: true, settingsSection: section }),
@@ -124,8 +109,6 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({
       isCommandOpen: false,
       commandInitialSearch: '',
-      isSearchOpen: false,
-      searchQuery: '',
       isSettingsOpen: false,
       isMediaSheetOpen: false,
       isCreateModalOpen: false,

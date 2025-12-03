@@ -13,8 +13,8 @@ import {
   useNotebookStore,
   useNotesStore,
   useTagsStore,
-  useUIStore,
-  useSearchStore
+  useSearchStore,
+  useRouterStore
 } from '../../stores'
 import { clsx } from 'clsx'
 
@@ -31,8 +31,11 @@ export function SearchPage({
   const { allNotebooks, selectNotebook } = useNotebookStore()
   const { setTarget } = useNotesStore()
   const { allTags } = useTagsStore()
-  const { searchQuery, closeSearch } = useUIStore()
+  const { currentRoute, navigateToDashboard } = useRouterStore()
   const [showFilters, setShowFilters] = useState(true)
+
+  const searchQuery =
+    currentRoute.type === 'search' ? currentRoute.query || '' : ''
 
   const {
     query,
@@ -88,7 +91,7 @@ export function SearchPage({
 
   const handleClose = () => {
     resetSearch()
-    closeSearch()
+    navigateToDashboard()
   }
 
   const handleResultClick = (note: {
@@ -99,7 +102,6 @@ export function SearchPage({
       setTarget(note.filename)
       selectNotebook(note.notebookName)
       resetSearch()
-      closeSearch()
     }
   }
 

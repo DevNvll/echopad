@@ -17,7 +17,8 @@ import {
   useVaultStore,
   useNotebookStore,
   useUIStore,
-  useSyncStore
+  useSyncStore,
+  useRouterStore
 } from '../stores'
 import { getIconByName } from './IconPicker'
 import { useKnownVaults, useVaultIcons } from '../hooks'
@@ -268,7 +269,7 @@ const SortableNotebookItem: React.FC<SortableNotebookItemProps> = ({
             <NotebookTreeItem
               key={child.relativePath}
               notebook={child}
-              activeNotebook={activeNotebook}
+              activeNotebook={effectiveActiveNotebook}
               onSelectNotebook={onSelectNotebook}
               onCreateSubnotebook={onCreateSubnotebook}
               onContextMenu={onContextMenu}
@@ -403,7 +404,7 @@ const NotebookTreeItem: React.FC<NotebookTreeItemProps> = ({
             <NotebookTreeItem
               key={child.relativePath}
               notebook={child}
-              activeNotebook={activeNotebook}
+              activeNotebook={effectiveActiveNotebook}
               onSelectNotebook={onSelectNotebook}
               onCreateSubnotebook={onCreateSubnotebook}
               onContextMenu={onContextMenu}
@@ -444,8 +445,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
     reorderPinnedNotebooks,
     reorderNotebooks
   } = useNotebookStore()
-  const { openCreateModal, openContextMenu, openSettings, closeSearch } = useUIStore()
+  const { openCreateModal, openContextMenu, openSettings } = useUIStore()
   const { vaultStatuses } = useSyncStore()
+  const { currentRoute, navigateToDashboard } = useRouterStore()
+
+  const isDashboardActive = currentRoute.type === 'dashboard'
+  const effectiveActiveNotebook = currentRoute.type === 'notebook' ? activeNotebook : null
 
   const [isVaultDropdownOpen, setIsVaultDropdownOpen] = useState(false)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
@@ -549,9 +554,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
   const handleSelectNotebook = useCallback(
     (relativePath: string) => {
       selectNotebook(relativePath)
-      closeSearch()
     },
-    [selectNotebook, closeSearch]
+    [selectNotebook]
   )
 
   const handleContextMenu = useCallback(
@@ -706,11 +710,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
         <button
           onClick={() => {
             setActiveNotebook(null)
-            closeSearch()
+            navigateToDashboard()
           }}
           className={clsx(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-[14px] group relative font-medium mb-2',
-            activeNotebook === null
+            isDashboardActive
               ? 'bg-surfaceHighlight text-textMain shadow-sm'
               : 'text-textMuted hover:bg-surfaceHighlight/40 hover:text-textMain/90'
           )}
@@ -719,7 +723,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
             size={16}
             className={clsx(
               'shrink-0',
-              activeNotebook === null
+              isDashboardActive
                 ? 'text-brand'
                 : 'text-textMuted/60 group-hover:text-textMuted'
             )}
@@ -750,7 +754,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                     <SortablePinnedItem
                       key={notebook.relativePath}
                       notebook={notebook}
-                      activeNotebook={activeNotebook}
+                      activeNotebook={effectiveActiveNotebook}
                       onSelectNotebook={handleSelectNotebook}
                       onContextMenu={handleContextMenu}
                       onTogglePin={togglePin}
@@ -791,7 +795,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ width }) => {
                   <SortableNotebookItem
                     key={notebook.relativePath}
                     notebook={notebook}
-                    activeNotebook={activeNotebook}
+                    activeNotebook={effectiveActiveNotebook}
                     onSelectNotebook={handleSelectNotebook}
                     onCreateSubnotebook={(parent) => openCreateModal(parent)}
                     onContextMenu={handleContextMenu}

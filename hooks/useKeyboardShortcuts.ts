@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useKeybindsStore } from '../stores'
 
 interface UseKeyboardShortcutsOptions {
   isCommandOpen: boolean
@@ -35,10 +36,14 @@ export function useKeyboardShortcuts({
   onCreateNotebook,
   onCloseModals
 }: UseKeyboardShortcutsOptions) {
+  const { matchesKeybind, isLoaded } = useKeybindsStore()
+
   useEffect(() => {
+    if (!isLoaded) return
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape => Close any open modal/dialog
-      if (e.key === 'Escape') {
+      // Escape / Close Modal
+      if (matchesKeybind('closeModal', e)) {
         if (isSearchOpen) {
           e.preventDefault()
           onCloseSearch()
@@ -51,15 +56,15 @@ export function useKeyboardShortcuts({
         }
       }
 
-      // Ctrl/Cmd + Shift + F => Open Search
-      if (e.key === 'f' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      // Advanced Search
+      if (matchesKeybind('advancedSearch', e)) {
         e.preventDefault()
         onOpenSearch()
         return
       }
 
-      // Ctrl/Cmd + , => Settings
-      if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
+      // Settings
+      if (matchesKeybind('settings', e)) {
         e.preventDefault()
         if (isSettingsOpen) {
           onToggleSettings()
@@ -69,8 +74,8 @@ export function useKeyboardShortcuts({
         return
       }
 
-      // Ctrl/Cmd + K => Command Palette
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      // Command Palette
+      if (matchesKeybind('commandPalette', e)) {
         // Allow Ctrl+K for navigation when command palette is open
         if (isCommandOpen && e.ctrlKey && !e.metaKey) {
           return
@@ -80,15 +85,15 @@ export function useKeyboardShortcuts({
         return
       }
 
-      // Ctrl/Cmd + B => Toggle Sidebar
-      if (e.key === 'b' && (e.metaKey || e.ctrlKey)) {
+      // Toggle Sidebar
+      if (matchesKeybind('toggleSidebar', e)) {
         e.preventDefault()
         onToggleSidebar()
         return
       }
 
-      // Ctrl/Cmd + N => Focus input (new note), restore last notebook if none active
-      if (e.key === 'n' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      // New Note
+      if (matchesKeybind('newNote', e)) {
         e.preventDefault()
         if (hasActiveNotebook) {
           onFocusInput()
@@ -98,8 +103,8 @@ export function useKeyboardShortcuts({
         return
       }
 
-      // Ctrl/Cmd + Shift + N => Create new notebook
-      if (e.key === 'N' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      // New Notebook
+      if (matchesKeybind('newNotebook', e)) {
         e.preventDefault()
         onCreateNotebook()
         return
@@ -109,6 +114,8 @@ export function useKeyboardShortcuts({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [
+    isLoaded,
+    matchesKeybind,
     isCommandOpen,
     isSettingsOpen,
     isSearchOpen,

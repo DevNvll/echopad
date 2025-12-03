@@ -7,7 +7,8 @@ import {
   HardDrive,
   Wrench,
   Cloud,
-  Bug
+  Bug,
+  Keyboard
 } from 'lucide-react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useQueryClient } from '@tanstack/react-query'
@@ -27,7 +28,8 @@ import {
   AppearanceSettings,
   AboutSettings,
   AdvancedSettings,
-  DevSettings
+  DevSettings,
+  KeybindsSettings
 } from './settings'
 import { SyncSettings } from './sync/SyncSettings'
 import { useVaultStore, useUIStore } from '../stores'
@@ -44,6 +46,7 @@ export type SettingsSection =
   | 'general'
   | 'storage'
   | 'appearance'
+  | 'keybinds'
   | 'sync'
   | 'advanced'
   | 'about'
@@ -60,6 +63,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'general', label: 'General', icon: <Settings size={16} /> },
   { id: 'storage', label: 'Storage', icon: <HardDrive size={16} /> },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
+  { id: 'keybinds', label: 'Keybinds', icon: <Keyboard size={16} /> },
   { id: 'sync', label: 'Sync', icon: <Cloud size={16} /> },
   { id: 'advanced', label: 'Advanced', icon: <Wrench size={16} /> },
   { id: 'about', label: 'About', icon: <Info size={16} /> },
@@ -189,7 +193,7 @@ export function SettingsModal() {
           </Button>
         </DialogHeader>
 
-        <div className="flex min-h-[400px] max-h-[70vh] overflow-hidden">
+        <div className="flex h-[70vh] overflow-hidden">
           <SettingsNav
             activeSection={activeSection}
             onSectionChange={setActiveSection}
@@ -226,6 +230,7 @@ export function SettingsModal() {
                 vaultName={vaultName}
               />
             )}
+            {activeSection === 'keybinds' && <KeybindsSettings />}
             {activeSection === 'sync' && <SyncSettings />}
             {activeSection === 'advanced' && <AdvancedSettings />}
             {activeSection === 'about' && (
