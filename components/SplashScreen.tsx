@@ -6,7 +6,7 @@ interface SplashScreenProps {
 
 export function SplashScreen({
   isVisible,
-  appName = 'Lazuli',
+  appName,
   accentColor
 }: SplashScreenProps) {
   if (!isVisible) return null
@@ -48,7 +48,7 @@ export function SplashScreen({
             </svg>
           </div>
           <span className="text-2xl font-medium text-textMain tracking-wide">
-            {appName.toLowerCase()}
+            {(appName || 'echopad').toLowerCase()}
           </span>
         </div>
 
