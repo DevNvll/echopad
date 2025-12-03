@@ -109,6 +109,20 @@ export function useKeyboardShortcuts({
         onCreateNotebook()
         return
       }
+
+      // Block browser shortcuts
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        const key = e.key.toLowerCase()
+        if (key === 'f') {
+          e.preventDefault()
+          onOpenSearch()
+          return
+        }
+        if (key === 'p' || key === 'g') {
+          e.preventDefault()
+          return
+        }
+      }
     }
 
     document.addEventListener('keydown', handleKeyDown)
