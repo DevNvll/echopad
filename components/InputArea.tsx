@@ -198,6 +198,95 @@ export const InputArea: React.FC = () => {
     setIsPreviewMode(false) // Reset preview mode after sending
   }
 
+  const handleListContinuation = (e: React.KeyboardEvent) => {
+    const textarea = textareaRef.current
+    if (!textarea) return false
+
+    const cursorPos = textarea.selectionStart
+    const text = content.substring(0, cursorPos)
+    const lines = text.split('\n')
+    const currentLine = lines[lines.length - 1]
+
+    const todoPattern = /^(\s*)([-*+])\s+\[([ x])\]\s*(.*)$/
+    const listPattern = /^(\s*)([-*+])\s+(.*)$/
+    const numberedPattern = /^(\s*)(\d+)\.\s+(.*)$/
+
+    const todoMatch = currentLine.match(todoPattern)
+    if (todoMatch) {
+      const [, indent, bullet, , itemContent] = todoMatch
+      if (itemContent.trim() === '') {
+        e.preventDefault()
+        const lineStart = cursorPos - currentLine.length
+        const newContent = content.substring(0, lineStart) + content.substring(cursorPos)
+        setContent(newContent)
+        setTimeout(() => {
+          textarea.setSelectionRange(lineStart, lineStart)
+        }, 0)
+        return true
+      }
+      e.preventDefault()
+      const insertion = `\n${indent}${bullet} [ ] `
+      const newContent = content.substring(0, cursorPos) + insertion + content.substring(cursorPos)
+      setContent(newContent)
+      const newCursorPos = cursorPos + insertion.length
+      setTimeout(() => {
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+      }, 0)
+      return true
+    }
+
+    const numberedMatch = currentLine.match(numberedPattern)
+    if (numberedMatch) {
+      const [, indent, num, itemContent] = numberedMatch
+      if (itemContent.trim() === '') {
+        e.preventDefault()
+        const lineStart = cursorPos - currentLine.length
+        const newContent = content.substring(0, lineStart) + content.substring(cursorPos)
+        setContent(newContent)
+        setTimeout(() => {
+          textarea.setSelectionRange(lineStart, lineStart)
+        }, 0)
+        return true
+      }
+      e.preventDefault()
+      const nextNum = parseInt(num, 10) + 1
+      const insertion = `\n${indent}${nextNum}. `
+      const newContent = content.substring(0, cursorPos) + insertion + content.substring(cursorPos)
+      setContent(newContent)
+      const newCursorPos = cursorPos + insertion.length
+      setTimeout(() => {
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+      }, 0)
+      return true
+    }
+
+    const listMatch = currentLine.match(listPattern)
+    if (listMatch) {
+      const [, indent, bullet, itemContent] = listMatch
+      if (itemContent.trim() === '') {
+        e.preventDefault()
+        const lineStart = cursorPos - currentLine.length
+        const newContent = content.substring(0, lineStart) + content.substring(cursorPos)
+        setContent(newContent)
+        setTimeout(() => {
+          textarea.setSelectionRange(lineStart, lineStart)
+        }, 0)
+        return true
+      }
+      e.preventDefault()
+      const insertion = `\n${indent}${bullet} `
+      const newContent = content.substring(0, cursorPos) + insertion + content.substring(cursorPos)
+      setContent(newContent)
+      const newCursorPos = cursorPos + insertion.length
+      setTimeout(() => {
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+      }, 0)
+      return true
+    }
+
+    return false
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showCommandAutocomplete && !isPreviewMode && ['ArrowDown', 'ArrowUp', 'Tab', 'Escape'].includes(e.key)) {
       if (e.key === 'Tab') {
@@ -209,6 +298,12 @@ export const InputArea: React.FC = () => {
     if (isPreviewMode && showCommandAutocomplete && !['Escape', 'Enter'].includes(e.key) && !e.ctrlKey && !e.metaKey) {
       setIsPreviewMode(false)
       return
+    }
+
+    if (e.key === 'Enter' && e.shiftKey) {
+      if (handleListContinuation(e)) {
+        return
+      }
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {
